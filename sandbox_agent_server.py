@@ -24,6 +24,13 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent
 INDEX_FILE = ROOT / "sandbox_agent.html"
+BENCHMARK_FILE = ROOT / "benchmark_runner.py"
+MEASURED_RUNNER_FILE = ROOT / "measured_exec_runner.py"
+SLIDE_LOAD_RUNNER_FILE = ROOT / "sandbox_slide_load_runner.py"
+AGENT_WORKLOAD_FILE = ROOT / "agent_workload_runner.py"
+SLIDE_TEMPLATE_FILE = ROOT / "slide_template.py"
+BENCHMARK_TASKS = ("cpu", "memory", "disk", "mixed")
+LOAD_WORKLOADS = ("slide", "documents", "data", "code", "images", "search", "workflow")
 MAX_FILE_BYTES = 2 * 1024 * 1024
 EXEC_IDLE_TIMEOUT_SECONDS = 180
 DEFAULT_TEMPLATE_ID = "py-libreoffice-skills"
@@ -33,6 +40,7 @@ MAX_CONNECT_FRAME_BYTES = 8 * 1024 * 1024
 
 state_lock = threading.Lock()
 lifecycle_lock = threading.Lock()
+benchmark_lock = threading.Lock()
 state: dict[str, Any] = {
     "sandbox_id": None,
     "domain": None,
@@ -286,27 +294,90 @@ def open_process(command: str, cwd: str) -> Any:
     return urlopen(request, timeout=EXEC_IDLE_TIMEOUT_SECONDS)
 
 
-def run_process_capture(command: str, cwd: str = "/output") -> dict[str, Any]:
+def open_measured_process(command: str, cwd: str) -> tuple[Any, str]:
+    """Run the command through a Linux child wrapper without losing live output."""
+    try:
+        source = MEASURED_RUNNER_FILE.read_text(encoding="utf-8")
+    except OSError as error:
+        raise RuntimeError(f"cannot read process metric runner: {error}") from error
+    marker = f"__SANDBOX_METRICS_{secrets.token_hex(16)}__"
+    wrapped = f"python3 -u -c {shlex.quote(source)} {shlex.quote(command)} {shlex.quote(marker)}"
+    return open_process(wrapped, cwd), marker
+
+
+def iter_measured_events(response: Any, marker: str):
+    """Remove the wrapper's tagged stderr line and emit a structured metric event."""
+    pending = ""
+    held_empty_line = False
+    metrics: dict[str, Any] | None = None
+    exit_code: int | None = None
+    for event in iter_process_events(response):
+        if event.get("stream") != "stderr":
+            if "exitCode" in event:
+                exit_code = event["exitCode"]
+            else:
+                yield event
+            continue
+        pending += event["data"]
+        while "\n" in pending:
+            line, pending = pending.split("\n", 1)
+            if held_empty_line:
+                if not line.startswith(marker):
+                    yield {"stream": "stderr", "data": "\n"}
+                held_empty_line = False
+            if not line:
+                held_empty_line = True
+                continue
+            if line.startswith(marker):
+                try:
+                    parsed = json.loads(line[len(marker):])
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, dict) and type(parsed.get("peak_rss_kb")) is int:
+                    metrics = parsed
+            elif line:
+                yield {"stream": "stderr", "data": line + "\n"}
+        if len(pending) > 65536:
+            yield {"stream": "stderr", "data": pending[:-256]}
+            pending = pending[-256:]
+    if pending:
+        yield {"stream": "stderr", "data": pending}
+    if held_empty_line:
+        yield {"stream": "stderr", "data": "\n"}
+    yield {"metrics": metrics or {"peak_rss_kb": None, "error": "RAM metric unavailable; process may have been terminated"}}
+    if exit_code is not None:
+        yield {"exitCode": exit_code}
+
+
+def run_process_capture(command: str, cwd: str = "/output", *, measure: bool = False) -> dict[str, Any]:
     stdout: list[str] = []
     stderr: list[str] = []
     exit_code: int | None = None
+    metrics: dict[str, Any] | None = None
     try:
-        with open_process(command, cwd) as response:
-            for event in iter_process_events(response):
+        if measure:
+            response, marker = open_measured_process(command, cwd)
+        else:
+            response = open_process(command, cwd)
+        with response:
+            events = iter_measured_events(response, marker) if measure else iter_process_events(response)
+            for event in events:
                 if event.get("stream") == "stdout":
                     stdout.append(event.get("data", ""))
                 elif event.get("stream") == "stderr":
                     stderr.append(event.get("data", ""))
+                elif "metrics" in event:
+                    metrics = event["metrics"]
                 elif "exitCode" in event:
                     exit_code = event["exitCode"]
     except HTTPError as error:
         detail = read_remote_error(error)
-        return {"exit_code": 1, "stdout": "", "stderr": f"HTTP {error.code}: {detail}"}
+        return {"exit_code": 1, "stdout": "", "stderr": f"HTTP {error.code}: {detail}", "metrics": metrics}
     except (RuntimeError, URLError, OSError, socket.timeout) as error:
-        return {"exit_code": 1, "stdout": "", "stderr": str(error)}
+        return {"exit_code": 1, "stdout": "", "stderr": str(error), "metrics": metrics}
     if exit_code is None:
-        return {"exit_code": 1, "stdout": "".join(stdout), "stderr": "Sandbox process ended without an exit code"}
-    return {"exit_code": exit_code, "stdout": "".join(stdout), "stderr": "".join(stderr)}
+        return {"exit_code": 1, "stdout": "".join(stdout), "stderr": "Sandbox process ended without an exit code", "metrics": metrics}
+    return {"exit_code": exit_code, "stdout": "".join(stdout), "stderr": "".join(stderr), "metrics": metrics}
 
 
 def run_command_for_setup(command: str) -> None:
@@ -323,6 +394,71 @@ def run_command_for_setup(command: str) -> None:
         raise RuntimeError(f"Sandbox workspace initialization failed (HTTP {error.code}): {detail}") from error
     except (URLError, OSError, socket.timeout) as error:
         raise RuntimeError(f"Sandbox workspace initialization failed: {error}") from error
+
+
+def benchmark_command(source: str, task: str) -> str:
+    """Pass only server-owned code and allowlisted task names to the sandbox."""
+    if task not in (*BENCHMARK_TASKS, "hardware"):
+        raise ValueError("unknown benchmark task")
+    return f"python3 -c {shlex.quote(source)} {shlex.quote(task)}"
+
+
+def benchmark_result(source: str, task: str) -> dict[str, Any]:
+    result = run_process_capture(benchmark_command(source, task), "/scratch")
+    if result["exit_code"] != 0:
+        raise RuntimeError(f"{task} benchmark failed: {result['stderr'][:500] or 'exit code ' + str(result['exit_code'])}")
+    try:
+        data = json.loads(result["stdout"])
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"{task} benchmark did not return JSON") from error
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{task} benchmark returned invalid data")
+    return data
+
+
+def load_test_options(body: dict[str, Any]) -> tuple[int, int, float, str]:
+    users = body.get("users", 2)
+    tasks_per_user = body.get("tasks_per_user", 1)
+    stagger_seconds = body.get("stagger_seconds", 0)
+    workload = body.get("workload", "slide")
+    if type(users) is not int or not 1 <= users <= 20:
+        raise ValueError("users must be an integer from 1 to 20")
+    if type(tasks_per_user) is not int or not 1 <= tasks_per_user <= 10:
+        raise ValueError("tasks_per_user must be an integer from 1 to 10")
+    if users * tasks_per_user > 100:
+        raise ValueError("users * tasks_per_user must not exceed 100")
+    if type(stagger_seconds) not in (int, float) or not 0 <= stagger_seconds <= 2:
+        raise ValueError("stagger_seconds must be a number from 0 to 2")
+    if not isinstance(workload, str) or workload not in LOAD_WORKLOADS:
+        raise ValueError("workload must be one of slide, documents, data, code, images, search, workflow")
+    return users, tasks_per_user, float(stagger_seconds), workload
+
+
+def run_slide_load_experiment(users: int, tasks_per_user: int, stagger_seconds: float,
+                              workload: str = "slide") -> dict[str, Any]:
+    if workload not in LOAD_WORKLOADS:
+        raise ValueError("unknown workload")
+    try:
+        runner = SLIDE_LOAD_RUNNER_FILE.read_text(encoding="utf-8")
+        template = SLIDE_TEMPLATE_FILE.read_bytes() if workload == "slide" else b""
+        worker = AGENT_WORKLOAD_FILE.read_bytes() if workload != "slide" else b""
+    except OSError as error:
+        raise RuntimeError(f"cannot read slide load-test files: {error}") from error
+    encoded_template = base64.b64encode(template).decode("ascii")
+    encoded_worker = base64.b64encode(worker).decode("ascii")
+    command = (f"python3 -u -c {shlex.quote(runner)} {users} {tasks_per_user} "
+               f"{shlex.quote(str(stagger_seconds))} {shlex.quote(encoded_template)} "
+               f"{shlex.quote(workload)} {shlex.quote(encoded_worker)}")
+    result = run_process_capture(command, "/scratch")
+    if result["exit_code"] != 0:
+        raise RuntimeError(f"sandbox load test failed: {result['stderr'][:500]}")
+    try:
+        report = json.loads(result["stdout"])
+    except json.JSONDecodeError as error:
+        raise RuntimeError("sandbox load test returned invalid JSON") from error
+    if not isinstance(report, dict):
+        raise RuntimeError("sandbox load test returned an invalid report")
+    return report
 
 
 def to_sandbox_call(tool_call: Any) -> dict[str, Any]:
@@ -476,6 +612,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, plan_mock_turn(prompt))
             elif parsed.path == "/api/agent/create-slide":
                 self.create_slide()
+            elif parsed.path == "/api/sandbox/benchmarks":
+                self.run_benchmarks()
+            elif parsed.path == "/api/sandbox/load-test":
+                self.run_slide_load_test()
             elif parsed.path == "/api/sandbox/exec":
                 self.exec_command()
             elif parsed.path == "/api/sandbox/files":
@@ -629,7 +769,7 @@ class Handler(BaseHTTPRequestHandler):
         cwd = normalize_cwd(cwd)
         require_sandbox_id()
         try:
-            response = open_process(command, cwd)
+            response, marker = open_measured_process(command, cwd)
         except HTTPError as error:
             self.send_json(502, {"error": "sandbox exec failed", "remote_status": error.code})
             return
@@ -642,7 +782,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         try:
-            for event in iter_process_events(response):
+            for event in iter_measured_events(response, marker):
                 self.wfile.write(json_bytes(event) + b"\n")
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
@@ -655,6 +795,58 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         finally:
             response.close()
+
+    def run_benchmarks(self) -> None:
+        error = config_error()
+        if error:
+            self.send_json(503, {"error": error})
+            return
+        body = self.read_json()
+        tasks = body.get("tasks", list(BENCHMARK_TASKS))
+        if (not isinstance(tasks, list) or not tasks or len(tasks) > len(BENCHMARK_TASKS)
+                or any(not isinstance(task, str) or task not in BENCHMARK_TASKS for task in tasks)
+                or len(set(tasks)) != len(tasks)):
+            raise ValueError("tasks must be a non-empty list of distinct cpu, memory, disk, mixed")
+        require_sandbox_id()
+        if not benchmark_lock.acquire(blocking=False):
+            self.send_json(409, {"error": "a benchmark suite is already running"})
+            return
+        try:
+            try:
+                source = BENCHMARK_FILE.read_text(encoding="utf-8")
+            except OSError as error:
+                self.send_json(500, {"error": f"cannot read benchmark runner: {error}"})
+                return
+            hardware = benchmark_result(source, "hardware")
+            results = []
+            for task in tasks:
+                try:
+                    results.append(benchmark_result(source, task))
+                except RuntimeError as error:
+                    results.append({"task": task, "error": str(error)})
+            self.send_json(200, {"ok": True, "hardware": hardware, "results": results})
+        except RuntimeError as error:
+            self.send_json(502, {"error": str(error)})
+        finally:
+            benchmark_lock.release()
+
+    def run_slide_load_test(self) -> None:
+        error = config_error()
+        if error:
+            self.send_json(503, {"error": error})
+            return
+        users, tasks_per_user, stagger_seconds, workload = load_test_options(self.read_json())
+        require_sandbox_id()
+        if not benchmark_lock.acquire(blocking=False):
+            self.send_json(409, {"error": "a benchmark or load test is already running"})
+            return
+        try:
+            report = run_slide_load_experiment(users, tasks_per_user, stagger_seconds, workload)
+            self.send_json(200, {"ok": True, "scope": "one shared sandbox", "report": report})
+        except RuntimeError as error:
+            self.send_json(502, {"error": str(error)})
+        finally:
+            benchmark_lock.release()
 
     def create_slide(self) -> None:
         if config_error():
@@ -677,7 +869,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(502, {"error": "slide script upload failed", "detail": str(error)})
             return
 
-        result = run_process_capture(f"python3 {shlex.quote(script_path)}", "/output")
+        result = run_process_capture(f"python3 {shlex.quote(script_path)}", "/output", measure=True)
         if result["exit_code"] != 0:
             self.send_json(502, {"error": "slide generation failed", "result": result})
             return

@@ -1,10 +1,19 @@
 import io
+import importlib.util
+import base64
 import json
 import os
+import subprocess
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import sandbox_agent_server as app
+import sandbox_slide_load_runner as slide_load_runner
+import agent_workload_runner as agent_workloads
+import slide_two_client_load_test as slide_load_test
 
 
 def connect_frame(payload, flags=0):
@@ -169,6 +178,250 @@ class SandboxContractTests(unittest.TestCase):
         self.assertEqual(status, 502)
         self.assertEqual(payload["remote_status"], 500)
         self.assertEqual(payload["detail"]["message"], "template not found")
+
+    def test_benchmark_command_rejects_unrecognized_tasks(self):
+        with self.assertRaisesRegex(ValueError, "unknown benchmark task"):
+            app.benchmark_command("print('unsafe')", "custom; echo bad")
+        command = app.benchmark_command("print('ok')", "cpu")
+        self.assertIn("python3 -c", command)
+
+    def test_runner_source_compiles(self):
+        compile(app.BENCHMARK_FILE.read_text(encoding="utf-8"), "benchmark_runner.py", "exec")
+        compile(app.MEASURED_RUNNER_FILE.read_text(encoding="utf-8"), "measured_exec_runner.py", "exec")
+        compile(app.SLIDE_LOAD_RUNNER_FILE.read_text(encoding="utf-8"), "sandbox_slide_load_runner.py", "exec")
+        compile(app.AGENT_WORKLOAD_FILE.read_text(encoding="utf-8"), "agent_workload_runner.py", "exec")
+
+    def test_load_test_options_validate_bounds_and_types(self):
+        self.assertEqual(app.load_test_options({}), (2, 1, 0.0, "slide"))
+        self.assertEqual(app.load_test_options({"users": 20, "tasks_per_user": 5, "stagger_seconds": 0.5}),
+                         (20, 5, 0.5, "slide"))
+        self.assertEqual(app.load_test_options({"workload": "workflow"}), (2, 1, 0.0, "workflow"))
+        for body in ({"users": 0}, {"users": 21}, {"users": True},
+                     {"tasks_per_user": 0}, {"tasks_per_user": 11},
+                     {"users": 20, "tasks_per_user": 10},
+                     {"stagger_seconds": -1}, {"stagger_seconds": 3},
+                     {"stagger_seconds": True}, {"workload": "unknown"}, {"workload": 4}):
+            with self.subTest(body=body), self.assertRaises(ValueError):
+                app.load_test_options(body)
+
+    def test_slide_load_percentile_for_small_samples(self):
+        self.assertIsNone(slide_load_runner.percentile([], 0.95))
+        self.assertEqual(slide_load_runner.percentile([2.0], 0.95), 2.0)
+        self.assertEqual(slide_load_runner.percentile([1.0, 3.0], 0.5), 2.0)
+
+    def test_slide_load_runner_rejects_unbounded_direct_invocation(self):
+        template = app.SLIDE_TEMPLATE_FILE.read_text(encoding="utf-8")
+        with self.assertRaises(ValueError):
+            slide_load_runner.run_experiment(1000, 1, 0, template)
+        with self.assertRaises(ValueError):
+            slide_load_runner.run_experiment(1, 1, 0, template, "unknown", "print(1)")
+
+    def test_agent_workload_code_and_search(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            code = root / "code"
+            code.mkdir()
+            self.assertEqual(agent_workloads.run("code", code)["tests_passed"], 3)
+            search = root / "search"
+            search.mkdir()
+            self.assertEqual(agent_workloads.run("search", search)["matches"], 71)
+
+    @unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow is not installed")
+    def test_agent_workload_images(self):
+        with tempfile.TemporaryDirectory() as name:
+            result = agent_workloads.run("images", Path(name))
+        self.assertEqual(result["images_processed"], 4)
+        self.assertGreater(result["contact_bytes"], 1000)
+
+    def test_slide_load_endpoint_returns_report(self):
+        handler = object.__new__(app.Handler)
+        handler.read_json = Mock(return_value={"users": 2, "tasks_per_user": 3, "stagger_seconds": 0.5})
+        handler.send_json = Mock()
+        report = {"simulated_users": 2, "requested_tasks": 6, "succeeded": 6}
+        with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
+             patch.object(app, "run_slide_load_experiment", return_value=report) as run:
+            handler.run_slide_load_test()
+        run.assert_called_once_with(2, 3, 0.5, "slide")
+        status, payload = handler.send_json.call_args.args
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["report"], report)
+
+    def test_slide_load_runner_is_launched_inside_sandbox_scratch(self):
+        fake_process = {"exit_code": 0, "stdout": '{"simulated_users":2}', "stderr": ""}
+        with patch.object(app, "run_process_capture", return_value=fake_process) as run:
+            report = app.run_slide_load_experiment(2, 1, 0.0)
+        self.assertEqual(report["simulated_users"], 2)
+        command, cwd = run.call_args.args
+        self.assertEqual(cwd, "/scratch")
+        self.assertTrue(command.startswith("python3 -u -c "))
+        self.assertIn(" 2 1 0.0 ", command)
+        self.assertIn(" slide ", command)
+
+    def test_agent_workload_source_sent_to_sandbox(self):
+        fake_process = {"exit_code": 0, "stdout": '{"workload":"data"}', "stderr": ""}
+        with patch.object(app, "run_process_capture", return_value=fake_process) as run:
+            report = app.run_slide_load_experiment(1, 1, 0, "data")
+        self.assertEqual(report["workload"], "data")
+        self.assertIn(" data ", run.call_args.args[0])
+
+    @unittest.skipUnless(sys.platform.startswith("linux") and os.path.isdir("/scratch"),
+                         "sandbox load runner requires Linux /scratch")
+    def test_two_slide_tasks_run_inside_linux_scratch(self):
+        template = app.SLIDE_TEMPLATE_FILE.read_text(encoding="utf-8")
+        report = slide_load_runner.run_experiment(2, 1, 0, template)
+        self.assertEqual(report["requested_tasks"], 2)
+        self.assertEqual(report["succeeded"], 2, report["results"])
+        self.assertEqual([item["slide_count"] for item in report["results"]], [5, 5])
+        self.assertGreaterEqual(report["max_concurrent_tasks"], 1)
+        self.assertLessEqual(report["max_concurrent_tasks"], 2)
+
+    def test_measured_stream_extracts_peak_ram_without_leaking_marker(self):
+        marker = "__TEST_METRIC__"
+        stream = FakeResponse(
+            connect_frame({"event": {"data": {"stdout": base64.b64encode(b"hello\n").decode()}}})
+            + connect_frame({"event": {"data": {"stderr": base64.b64encode(b"warning\n\n__TEST_MET").decode()}}})
+            + connect_frame({"event": {"data": {"stderr": base64.b64encode(b'RIC__{"peak_rss_kb":4864,"elapsed_seconds":2.0}\n').decode()}}})
+            + connect_frame({"event": {"end": {"exitCode": 0}}})
+            + connect_frame({"metadata": {}}, flags=2)
+        )
+        events = list(app.iter_measured_events(stream, marker))
+        self.assertEqual(events, [
+            {"stream": "stdout", "data": "hello\n"},
+            {"stream": "stderr", "data": "warning\n"},
+            {"metrics": {"peak_rss_kb": 4864, "elapsed_seconds": 2.0}},
+            {"exitCode": 0},
+        ])
+
+    def test_measured_capture_returns_ram_even_for_nonzero_exit(self):
+        marker = "__TEST_METRIC__"
+        stream = FakeResponse(
+            connect_frame({"event": {"data": {"stderr": base64.b64encode(b'\n__TEST_METRIC__{"peak_rss_kb":10240}\n').decode()}}})
+            + connect_frame({"event": {"end": {"exitCode": 7}}})
+            + connect_frame({"metadata": {}}, flags=2)
+        )
+        with patch.object(app, "open_measured_process", return_value=(stream, marker)):
+            result = app.run_process_capture("exit 7", measure=True)
+        self.assertEqual(result["exit_code"], 7)
+        self.assertEqual(result["metrics"]["peak_rss_kb"], 10240)
+        self.assertNotIn(marker, result["stderr"])
+
+    def test_measured_stream_reports_unavailable_metric_if_wrapper_did_not_report(self):
+        stream = FakeResponse(
+            connect_frame({"event": {"end": {"exitCode": 137}}})
+            + connect_frame({"metadata": {}}, flags=2)
+        )
+        events = list(app.iter_measured_events(stream, "__TEST_METRIC__"))
+        self.assertIsNone(events[0]["metrics"]["peak_rss_kb"])
+        self.assertEqual(events[1], {"exitCode": 137})
+
+    def test_exec_route_streams_ram_metric_event(self):
+        marker = "__TEST_METRIC__"
+        stream = FakeResponse(
+            connect_frame({"event": {"data": {"stderr": base64.b64encode(b'\n__TEST_METRIC__{"peak_rss_kb":8192}\n').decode()}}})
+            + connect_frame({"event": {"end": {"exitCode": 0}}})
+            + connect_frame({"metadata": {}}, flags=2)
+        )
+        handler = object.__new__(app.Handler)
+        handler.read_json = Mock(return_value={"command": "pwd", "cwd": "/output"})
+        handler.send_response = Mock()
+        handler.send_header = Mock()
+        handler.end_headers = Mock()
+        handler.wfile = io.BytesIO()
+        with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
+             patch.object(app, "open_measured_process", return_value=(stream, marker)) as run:
+            handler.exec_command()
+        run.assert_called_once_with("pwd", "/output")
+        events = [json.loads(line) for line in handler.wfile.getvalue().splitlines()]
+        self.assertEqual(events, [{"metrics": {"peak_rss_kb": 8192}}, {"exitCode": 0}])
+
+    def test_create_slide_response_includes_ram_metric(self):
+        handler = object.__new__(app.Handler)
+        handler.read_json = Mock(return_value={"script": "print('ok')"})
+        handler.send_json = Mock()
+        measured = {"exit_code": 0, "stdout": "", "stderr": "", "metrics": {"peak_rss_kb": 12000}}
+        with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
+             patch.object(app, "request_file", side_effect=[(200, b"[]", {}), (200, b"<html></html>", {})]), \
+             patch.object(app, "run_process_capture", return_value=measured) as run:
+            handler.create_slide()
+        run.assert_called_once_with("python3 /output/create_slide.py", "/output", measure=True)
+        status, payload = handler.send_json.call_args.args
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["result"]["metrics"]["peak_rss_kb"], 12000)
+
+    def test_two_client_slide_scripts_have_separate_outputs_and_markers(self):
+        template = slide_load_test.TEMPLATE_PATH.read_text(encoding="utf-8")
+        first = slide_load_test.prepare_script(template, "/output/test_A.html", "marker-A")
+        second = slide_load_test.prepare_script(template, "/output/test_B.html", "marker-B")
+        self.assertIn('path = Path("/output/test_A.html")', first)
+        self.assertIn('path = Path("/output/test_B.html")', second)
+        self.assertIn("<title>marker-A</title>", first)
+        self.assertNotIn("marker-B", first)
+        self.assertIn("<title>marker-B</title>", second)
+        self.assertNotIn("marker-A", second)
+        self.assertEqual(first.count(slide_load_test.ORIGINAL_OUTPUT), 0)
+
+    def test_benchmark_endpoint_validates_tasks_before_execution(self):
+        handler = object.__new__(app.Handler)
+        handler.send_json = Mock()
+        for invalid in ([], ["cpu", "cpu"], ["custom"], ["cpu", 1], "cpu"):
+            handler.read_json = Mock(return_value={"tasks": invalid})
+            with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
+                 patch.object(app, "benchmark_result") as run:
+                with self.assertRaises(ValueError):
+                    handler.run_benchmarks()
+                run.assert_not_called()
+
+    def test_benchmark_endpoint_returns_metrics_by_task(self):
+        handler = object.__new__(app.Handler)
+        handler.read_json = Mock(return_value={"tasks": ["memory", "cpu"]})
+        handler.send_json = Mock()
+        with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
+             patch.object(app, "benchmark_result", side_effect=[
+                 {"logical_cpus_visible": 2},
+                 {"task": "memory", "peak_rss_kb": 140000},
+                 {"task": "cpu", "cpu_user_seconds": 1.5},
+             ]) as run:
+            handler.run_benchmarks()
+        status, payload = handler.send_json.call_args.args
+        self.assertEqual(status, 200)
+        self.assertEqual([item["task"] for item in payload["results"]], ["memory", "cpu"])
+        self.assertEqual(payload["hardware"]["logical_cpus_visible"], 2)
+        self.assertEqual([call.args[1] for call in run.call_args_list], ["hardware", "memory", "cpu"])
+
+    def test_benchmark_suite_keeps_other_results_if_one_task_fails(self):
+        handler = object.__new__(app.Handler)
+        handler.read_json = Mock(return_value={"tasks": ["memory", "cpu"]})
+        handler.send_json = Mock()
+        with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
+             patch.object(app, "benchmark_result", side_effect=[{}, RuntimeError("memory failed"), {"task": "cpu"}]):
+            handler.run_benchmarks()
+        status, payload = handler.send_json.call_args.args
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["results"][0], {"task": "memory", "error": "memory failed"})
+        self.assertEqual(payload["results"][1], {"task": "cpu"})
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "runner requires Linux /proc and resource")
+    def test_cpu_runner_reports_real_process_metrics(self):
+        source = app.BENCHMARK_FILE.read_text(encoding="utf-8")
+        completed = subprocess.run([sys.executable, "-c", source, "cpu"],
+                                   capture_output=True, text=True, timeout=10, check=True)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["task"], "cpu")
+        self.assertGreater(result["elapsed_seconds"], 0)
+        self.assertGreater(result["peak_rss_kb"], 0)
+        self.assertGreater(result["detail"]["sha256_iterations"], 0)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "measured runner requires Linux resource")
+    def test_measured_runner_reports_peak_ram_of_real_child(self):
+        source = app.MEASURED_RUNNER_FILE.read_text(encoding="utf-8")
+        command = "python3 -c 'data = bytearray(16 * 1024 * 1024); print(len(data))'"
+        marker = "__TEST_METRIC__"
+        completed = subprocess.run([sys.executable, "-u", "-c", source, command, marker],
+                                   capture_output=True, text=True, timeout=15, check=True)
+        self.assertIn("16777216", completed.stdout)
+        metric_line = next(line for line in completed.stderr.splitlines() if line.startswith(marker))
+        metrics = json.loads(metric_line[len(marker):])
+        self.assertGreater(metrics["peak_rss_kb"], 16000)
 
 
 if __name__ == "__main__":

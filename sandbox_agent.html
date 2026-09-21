@@ -184,6 +184,34 @@
           </section>
 
           <section class="panel">
+            <div class="panel-header"><div><div class="panel-title">Benchmark sandbox</div><div class="panel-meta">Task riêng · chỉ dùng /scratch · tự dọn file tạm</div></div></div>
+            <div class="files">
+              <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;font-size:11px">
+                <label><input type="checkbox" class="benchmarkTask" value="cpu" checked> CPU (1.5s)</label>
+                <label><input type="checkbox" class="benchmarkTask" value="memory" checked> RAM (128 MiB)</label>
+                <label><input type="checkbox" class="benchmarkTask" value="disk" checked> Disk (32 MiB)</label>
+                <label><input type="checkbox" class="benchmarkTask" value="mixed" checked> Nén dữ liệu (16 MiB)</label>
+              </div>
+              <button class="button" id="benchmarkButton" disabled>Chạy benchmark</button>
+              <pre id="benchmarkResults" style="min-height:0;max-height:320px;padding:12px 0;white-space:pre-wrap">Chưa chạy. RAM peak là của từng process task, không phải cả sandbox.</pre>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header"><div><div class="panel-title">Thử tải agent trong sandbox</div><div class="panel-meta">User giả lập · task/process riêng · tối đa 100 task</div></div></div>
+            <div class="files">
+              <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:12px;font-size:11px">
+                <label>Task <select id="loadWorkload"><option value="slide">Tạo slide HTML</option><option value="documents">DOCX + PDF</option><option value="data">CSV + biểu đồ</option><option value="code">Viết code + test</option><option value="images">Xử lý ảnh</option><option value="search">Tìm kiếm file</option><option value="workflow">Workflow hỗn hợp</option></select></label>
+                <label>Users <input id="loadUsers" type="number" min="1" max="20" value="2" style="width:56px"></label>
+                <label>Task / user <input id="loadTasks" type="number" min="1" max="10" value="1" style="width:56px"></label>
+                <label>Trễ giữa users (s) <input id="loadStagger" type="number" min="0" max="2" step="0.1" value="0" style="width:60px"></label>
+              </div>
+              <button class="button" id="loadTestButton" disabled>Chạy thử tải</button>
+              <pre id="loadTestResults" style="min-height:0;max-height:340px;padding:12px 0;white-space:pre-wrap">Chưa chạy. Thí nghiệm chỉ mô phỏng nhiều user trong cùng một sandbox.</pre>
+            </div>
+          </section>
+
+          <section class="panel">
             <div class="panel-header"><div><div class="panel-title">/output files</div><div class="panel-meta">file API surface · scoped workspace</div></div><span class="api-badge" id="fileCount">0 files</span></div>
             <div class="files"><div id="fileList"><div class="panel-meta">No files inspected yet.</div></div><div class="file-actions"><input id="filePath" value="/output/agent-note.txt" aria-label="File path" /><button id="readButton">Read</button></div><div class="file-actions"><input id="slideScript" type="file" accept=".py,.txt" aria-label="Slide generator Python file" /><input id="slideOutput" value="/output/slide_html_dep.html" aria-label="Slide output path" /><button id="createSlideButton">Create slide</button></div></div>
           </section>
@@ -207,7 +235,7 @@
     function addMessage(text, role = "assistant") { const user = role === "user"; const item = document.createElement("div"); item.className = "message" + (user ? " user" : ""); item.innerHTML = `<div class="avatar">${user ? "YOU" : "AI"}</div><div><div class="bubble"><p>${escapeHtml(text)}</p></div><div class="time">${now()} · ${user ? "request" : "agent"}</div></div>`; feed.appendChild(item); feed.scrollTop = feed.scrollHeight; }
     function addTool(method, path, status = "running", body = "") { const item = document.createElement("div"); item.className = "tool-card"; item.innerHTML = `<div class="tool-head"><span class="method">${escapeHtml(method)}</span><span>${escapeHtml(path)}</span><span class="tool-status">${escapeHtml(status)}</span></div><div class="tool-body">${body}</div>`; feed.appendChild(item); feed.scrollTop = feed.scrollHeight; return item; }
     function updateTool(item, status, body) { item.querySelector(".tool-status").textContent = status; item.querySelector(".tool-body").innerHTML = body; }
-    function setBusy(value) { state.busy = value; $("sendButton").disabled = value; $("provisionButton").disabled = value; $("sideProvision").disabled = value; $("destroyButton").disabled = value || !state.active; $("turnState").textContent = value ? "working" : "idle"; }
+    function setBusy(value) { state.busy = value; $("sendButton").disabled = value; $("provisionButton").disabled = value; $("sideProvision").disabled = value; $("destroyButton").disabled = value || !state.active; $("benchmarkButton").disabled = value || !state.active; $("loadTestButton").disabled = value || !state.active; $("turnState").textContent = value ? "working" : "idle"; }
     function writeTerminal(text, kind = "normal") { const terminal = $("terminal"); const line = document.createElement("span"); line.className = kind; line.textContent = text; terminal.appendChild(document.createTextNode("\n")); terminal.appendChild(line); terminal.scrollTop = terminal.scrollHeight; }
     function resetTerminal(command) { $("terminal").innerHTML = `<span class="prompt">agent@workspace</span> <span style="color:#7f8da3">/output</span> $ ${escapeHtml(command)}`; $("terminalStatus").textContent = "streaming"; }
 
@@ -219,7 +247,9 @@
         if (typeof body === "string") throw new Error(body || `HTTP ${response.status}`);
         const detail = body.detail === undefined ? "" : (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
         const remote = body.remote_status ? ` (remote ${body.remote_status})` : "";
-        throw new Error(`${body.error || "Request failed"}${remote}${detail ? `: ${detail}` : ""}`);
+        const peak = body.result?.metrics?.peak_rss_kb;
+        const ram = peak == null ? "" : ` · peak RAM ${(peak / 1024).toFixed(1)} MiB`;
+        throw new Error(`${body.error || "Request failed"}${remote}${detail ? `: ${detail}` : ""}${ram}`);
       }
       return body;
     }
@@ -235,6 +265,8 @@
         $("sandboxDetail").textContent = state.active ? "Sandbox đang chạy; ID và token giữ ở backend" : "Provision to start an isolated workspace";
         $("sandboxTime").textContent = status.created_at ? new Date(status.created_at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "—";
         $("destroyButton").disabled = !state.active || state.busy;
+        $("benchmarkButton").disabled = !state.active || state.busy;
+        $("loadTestButton").disabled = !state.active || state.busy;
       } catch (error) { toast(error.message, true); }
     }
 
@@ -264,10 +296,10 @@
       try {
         const response = await fetch("/api/sandbox/exec", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command, cwd: "/output" }) });
         if (!response.ok) { const detail = await response.text(); throw new Error(detail || `HTTP ${response.status}`); }
-        const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let exitCode = null;
-        const consume = (line) => { if (!line.trim()) return; const result = consumeProcessEvent(JSON.parse(line)); if (result !== null) exitCode = result; };
+        const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let exitCode = null; let metrics = null;
+        const consume = (line) => { if (!line.trim()) return; const frame = JSON.parse(line); if (frame.metrics) { metrics = frame.metrics; return; } const result = consumeProcessEvent(frame); if (result !== null) exitCode = result; };
         while (true) { const chunk = await reader.read(); if (chunk.done) break; buffer += decoder.decode(chunk.value, { stream: true }); const lines = buffer.split(/\r?\n/); buffer = lines.pop(); lines.forEach(consume); }
-        consume(buffer); $("terminalStatus").textContent = `exit ${exitCode ?? "?"}`; updateTool(tool, exitCode === 0 ? "200 complete" : "exit " + (exitCode ?? "?"), `<code>ProcessEvent stream closed · exitCode: ${escapeHtml(exitCode ?? "unknown")}</code>`); markApi("exec", exitCode === 0 ? "done" : "error"); addMessage(exitCode === 0 ? "Command finished. Process.Start streamed the output from the sandbox." : "Process returned a non-zero or unknown exit status; inspect the terminal output.");
+        consume(buffer); const ram = metrics?.peak_rss_kb == null ? "RAM peak không đo được" : `RAM peak: ${(metrics.peak_rss_kb / 1024).toFixed(1)} MiB`; writeTerminal(ram, "exit"); $("terminalStatus").textContent = `exit ${exitCode ?? "?"} · ${ram}`; updateTool(tool, exitCode === 0 ? "200 complete" : "exit " + (exitCode ?? "?"), `<code>exitCode: ${escapeHtml(exitCode ?? "unknown")} · ${escapeHtml(ram)}</code>`); markApi("exec", exitCode === 0 ? "done" : "error"); addMessage(exitCode === 0 ? `Command finished. ${ram}.` : `Process returned a non-zero or unknown exit status. ${ram}.`);
       } catch (error) { updateTool(tool, "error", `<span class="stderr">${escapeHtml(error.message)}</span>`); markApi("exec", "error"); writeTerminal(error.message, "stderr"); $("terminalStatus").textContent = "error"; toast(error.message, true); }
     }
 
@@ -296,9 +328,70 @@
       try {
         const result = await api("/api/agent/create-slide", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, script_path: "/output/slide_template.py", output_path: outputPath }) });
         const preview = `${result.preview_url}`;
-        updateTool(tool, "200 created", `<code>${escapeHtml(result.artifact_path)} · ${result.bytes} bytes</code><br><a href="${escapeHtml(preview)}" target="_blank" rel="noopener">Open preview</a>`); state.filePaths.add(result.artifact_path); renderFiles(); addMessage(`Đã tạo slide ${result.artifact_path}. Bấm Open preview trong tool result để xem.`); toast("Slide created");
+        const peak = result.result?.metrics?.peak_rss_kb;
+        const ram = peak == null ? "RAM peak không đo được" : `RAM peak: ${(peak / 1024).toFixed(1)} MiB`;
+        updateTool(tool, "200 created", `<code>${escapeHtml(result.artifact_path)} · ${result.bytes} bytes · ${escapeHtml(ram)}</code><br><a href="${escapeHtml(preview)}" target="_blank" rel="noopener">Open preview</a>`); state.filePaths.add(result.artifact_path); renderFiles(); addMessage(`Đã tạo slide ${result.artifact_path}. ${ram}. Bấm Open preview để xem.`); toast("Slide created");
       } catch (error) { updateTool(tool, "error", `<span class="stderr">${escapeHtml(error.message)}</span>`); toast(error.message, true); }
       finally { setBusy(false); await refreshStatus(); }
+    }
+
+    function mib(bytes) { return bytes == null ? "n/a" : `${(bytes / 1048576).toFixed(1)} MiB`; }
+    async function runBenchmarks() {
+      if (!state.active || state.busy) return;
+      const tasks = [...document.querySelectorAll(".benchmarkTask:checked")].map(node => node.value);
+      if (!tasks.length) { toast("Chọn ít nhất một task", true); return; }
+      setBusy(true);
+      $("benchmarkResults").textContent = `Đang chạy ${tasks.join(", ")}...`;
+      try {
+        const data = await api("/api/sandbox/benchmarks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tasks }) });
+        const hw = data.hardware;
+        const lines = [
+          `CPU thấy: ${hw.logical_cpus_visible ?? "n/a"} · quota: ${hw.cpu_quota_cores ?? "không rõ"} core`,
+          `RAM sandbox: ${mib(hw.memory_current_bytes)} / limit ${mib(hw.memory_limit_bytes)}`,
+          `RAM /proc/meminfo: ${mib(hw.memory_available_bytes)} available / ${mib(hw.memory_total_bytes)} total`,
+          `/scratch: ${mib(hw.scratch_free_bytes)} free / ${mib(hw.scratch_total_bytes)} total`, ""
+        ];
+        for (const result of data.results) {
+          if (result.error) { lines.push(`${result.task.toUpperCase()} · lỗi: ${result.error}`); continue; }
+          lines.push(`${result.task.toUpperCase()} · ${result.elapsed_seconds}s · CPU ${result.cpu_percent_one_core}%`,
+            `  peak RSS ${mib(result.peak_rss_kb * 1024)} · CPU user/system ${result.cpu_user_seconds}/${result.cpu_system_seconds}s`,
+            `  disk read/write ${mib(result.disk_read_bytes)} / ${mib(result.disk_write_bytes)}`);
+        }
+        $("benchmarkResults").textContent = lines.join("\n");
+        addMessage(`Đã đo ${data.results.length} task trong sandbox. Xem bảng Benchmark sandbox.`);
+      } catch (error) { $("benchmarkResults").textContent = error.message; toast(error.message, true); }
+      finally { setBusy(false); }
+    }
+
+    async function runSlideLoadTest() {
+      if (!state.active || state.busy) return;
+      const workload = $("loadWorkload").value;
+      const users = Number($("loadUsers").value);
+      const tasks_per_user = Number($("loadTasks").value);
+      const stagger_seconds = Number($("loadStagger").value);
+      if (!Number.isInteger(users) || users < 1 || users > 20 || !Number.isInteger(tasks_per_user) || tasks_per_user < 1 || tasks_per_user > 10 || users * tasks_per_user > 100 || !Number.isFinite(stagger_seconds) || stagger_seconds < 0 || stagger_seconds > 2) {
+        toast("Giới hạn: 1–20 users, 1–10 task/user, tối đa 100 task, trễ 0–2 giây", true); return;
+      }
+      setBusy(true);
+      $("loadTestResults").textContent = `Đang chạy ${users} users × ${tasks_per_user} task (${workload}) trong sandbox...`;
+      try {
+        const data = await api("/api/sandbox/load-test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ users, tasks_per_user, stagger_seconds, workload }) });
+        const report = data.report;
+        const lines = [
+          `${report.workload} · ${report.simulated_users} users × ${report.tasks_per_user} task · thành công ${report.succeeded}/${report.requested_tasks} · lỗi ${report.failed}`,
+          `Tổng ${report.total_seconds}s · đồng thời tối đa ${report.max_concurrent_tasks} task · trễ ${report.stagger_seconds}s/user`,
+          `Latency p50/p95: ${report.latency_p50_seconds ?? "n/a"}/${report.latency_p95_seconds ?? "n/a"}s`,
+          `Task RAM peak lớn nhất: ${report.max_task_peak_rss_kb == null ? "n/a" : mib(report.max_task_peak_rss_kb * 1024)}`,
+          `RAM sandbox trước / peak lấy mẫu / sau / giới hạn: ${mib(report.sandbox_memory_before_bytes)} / ${mib(report.sandbox_memory_peak_sampled_bytes)} / ${mib(report.sandbox_memory_after_bytes)} / ${mib(report.sandbox_memory_limit_bytes)}`,
+          `OOM kill trong lúc chạy: ${report.sandbox_oom_kills_during_run ?? "n/a"}`, ""
+        ];
+        for (const item of report.results) {
+          lines.push(`User ${item.user} · task ${item.task}: ${item.ok ? "OK" : "LỖI"} · ${item.elapsed_seconds}s · RAM ${item.peak_rss_kb == null ? "n/a" : mib(item.peak_rss_kb * 1024)}${item.details ? ` · ${JSON.stringify(item.details)}` : ""}${item.error ? ` · ${item.error}` : ""}`);
+        }
+        $("loadTestResults").textContent = lines.join("\n");
+        addMessage(`Thử tải ${report.workload} trong sandbox: ${report.succeeded}/${report.requested_tasks} task thành công; RAM sandbox peak lấy mẫu ${mib(report.sandbox_memory_peak_sampled_bytes)}.`);
+      } catch (error) { $("loadTestResults").textContent = error.message; toast(error.message, true); }
+      finally { setBusy(false); }
     }
 
     function renderFiles() { $("fileCount").textContent = `${state.filePaths.size} file${state.filePaths.size === 1 ? "" : "s"}`; $("fileList").innerHTML = state.filePaths.size ? [...state.filePaths].map(path => `<div class="file-row"><span class="file-icon">▧</span><span class="file-name">${escapeHtml(path)}</span><span class="file-size">inspected</span></div>`).join("") : '<div class="panel-meta">No files inspected yet.</div>'; }
@@ -316,7 +409,7 @@
       finally { setBusy(false); }
     }
 
-    $("provisionButton").onclick = provision; $("sideProvision").onclick = provision; $("destroyButton").onclick = destroy; $("refreshButton").onclick = refreshStatus; $("sendButton").onclick = submit; $("readButton").onclick = () => readFile($("filePath").value.trim()); $("createSlideButton").onclick = createSlide;
+    $("provisionButton").onclick = provision; $("sideProvision").onclick = provision; $("destroyButton").onclick = destroy; $("refreshButton").onclick = refreshStatus; $("sendButton").onclick = submit; $("readButton").onclick = () => readFile($("filePath").value.trim()); $("createSlideButton").onclick = createSlide; $("benchmarkButton").onclick = runBenchmarks; $("loadTestButton").onclick = runSlideLoadTest;
     $("commandInput").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } });
     document.querySelectorAll(".quick").forEach((button) => button.addEventListener("click", () => { $("commandInput").value = button.dataset.command; submit(); }));
     setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }, 1000); $("clock").textContent = now(); refreshStatus();
