@@ -21,26 +21,31 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 from urllib.request import Request, urlopen
 
-
 ROOT = Path(__file__).resolve().parent
 INDEX_FILE = ROOT / "sandbox_agent.html"
 BENCHMARK_FILE = ROOT / "benchmark_runner.py"
 MEASURED_RUNNER_FILE = ROOT / "measured_exec_runner.py"
 SLIDE_LOAD_RUNNER_FILE = ROOT / "sandbox_slide_load_runner.py"
 AGENT_WORKLOAD_FILE = ROOT / "agent_workload_runner.py"
+AGENT_TASK_RUNNER_FILE = ROOT / "sandbox_agent_task_runner.py"
 SLIDE_TEMPLATE_FILE = ROOT / "slide_template.py"
-BENCHMARK_TASKS = ("cpu", "memory", "disk", "mixed")
+BENCHMARK_TASKS = ("cpu", "memory", "disk", "mixed", "agent")
 LOAD_WORKLOADS = ("slide", "documents", "data", "code", "images", "search", "workflow")
+AGENT_TASKS = LOAD_WORKLOADS
 MAX_FILE_BYTES = 2 * 1024 * 1024
 EXEC_IDLE_TIMEOUT_SECONDS = 180
 DEFAULT_TEMPLATE_ID = "py-libreoffice-skills"
 ENVD_PORT = 49983
 CONTROL_PLANE_USER_AGENT = "sandbox-agent/0.1"
 MAX_CONNECT_FRAME_BYTES = 8 * 1024 * 1024
+MAX_SANDBOX_MEMORY_BYTES = 2 * 1024 * 1024 * 1024
+MAX_LOAD_USERS = 8
+MAX_LOAD_TASKS = 80
 
 state_lock = threading.Lock()
 lifecycle_lock = threading.Lock()
 benchmark_lock = threading.Lock()
+agent_task_lock = threading.Lock()
 state: dict[str, Any] = {
     "sandbox_id": None,
     "domain": None,
@@ -396,15 +401,68 @@ def run_command_for_setup(command: str) -> None:
         raise RuntimeError(f"Sandbox workspace initialization failed: {error}") from error
 
 
-def benchmark_command(source: str, task: str) -> str:
+def verify_sandbox_memory_limit() -> int:
+    """Require an effective VM/cgroup limit no larger than the 2 GiB budget."""
+    source = (
+        "import json,os\n"
+        "from pathlib import Path\n"
+        "cg=None\n"
+        "paths=['/sys/fs/cgroup/memory.max','/sys/fs/cgroup/memory/memory.limit_in_bytes']\n"
+        "try:\n"
+        " for line in Path('/proc/self/cgroup').read_text().splitlines():\n"
+        "  hierarchy,controllers,relative=line.split(':',2)\n"
+        "  if hierarchy=='0' and not controllers:\n"
+        "   paths.insert(0,str(Path('/sys/fs/cgroup')/relative.lstrip('/')/'memory.max')); break\n"
+        "except (OSError,ValueError): pass\n"
+        "for p in paths:\n"
+        " try:\n"
+        "  value=Path(p).read_text().strip()\n"
+        "  if value and value!='max' and int(value)<2**60: cg=int(value); break\n"
+        " except (OSError,ValueError): pass\n"
+        "mem=None\n"
+        "try:\n"
+        " mem=next(int(x.split()[1])*1024 for x in Path('/proc/meminfo').read_text().splitlines() "
+        "if x.startswith('MemTotal:'))\n"
+        "except (OSError,ValueError,StopIteration,IndexError):\n"
+        " try: mem=os.sysconf('SC_PAGE_SIZE')*os.sysconf('SC_PHYS_PAGES')\n"
+        " except (OSError,ValueError): pass\n"
+        "print(json.dumps({'cgroup':cg,'mem_total':mem}))\n"
+    )
+    result = run_process_capture(f"python3 -c {shlex.quote(source)}", "/")
+    if result["exit_code"] != 0:
+        detail = result.get("stderr", "").strip()[-300:]
+        raise RuntimeError(f"cannot read the sandbox memory limit{': ' + detail if detail else ''}")
+    try:
+        payload = json.loads(result["stdout"])
+        candidates = [int(value) for value in (payload.get("mem_total"), payload.get("cgroup"))
+                      if value is not None and int(value) > 0]
+        memory_limit = min(candidates)
+    except (ValueError, TypeError, AttributeError, json.JSONDecodeError) as error:
+        raise RuntimeError("sandbox returned an invalid memory limit") from error
+    if memory_limit <= 0 or memory_limit > MAX_SANDBOX_MEMORY_BYTES:
+        raise RuntimeError(
+            f"sandbox memory limit is {memory_limit} bytes; maximum allowed is {MAX_SANDBOX_MEMORY_BYTES} bytes")
+    return memory_limit
+
+
+def benchmark_command(source: str, task: str, worker_source: bytes | None = None) -> str:
     """Pass only server-owned code and allowlisted task names to the sandbox."""
     if task not in (*BENCHMARK_TASKS, "hardware"):
         raise ValueError("unknown benchmark task")
-    return f"python3 -c {shlex.quote(source)} {shlex.quote(task)}"
+    command = f"python3 -c {shlex.quote(source)} {shlex.quote(task)}"
+    if task == "agent":
+        if worker_source is None:
+            raise ValueError("agent benchmark requires worker source")
+        command += " " + shlex.quote(base64.b64encode(worker_source).decode("ascii"))
+    return command
 
 
 def benchmark_result(source: str, task: str) -> dict[str, Any]:
-    result = run_process_capture(benchmark_command(source, task), "/scratch")
+    try:
+        worker_source = AGENT_WORKLOAD_FILE.read_bytes() if task == "agent" else None
+    except OSError as error:
+        raise RuntimeError(f"cannot read agent workload source: {error}") from error
+    result = run_process_capture(benchmark_command(source, task, worker_source), "/scratch")
     if result["exit_code"] != 0:
         raise RuntimeError(f"{task} benchmark failed: {result['stderr'][:500] or 'exit code ' + str(result['exit_code'])}")
     try:
@@ -421,12 +479,12 @@ def load_test_options(body: dict[str, Any]) -> tuple[int, int, float, str]:
     tasks_per_user = body.get("tasks_per_user", 1)
     stagger_seconds = body.get("stagger_seconds", 0)
     workload = body.get("workload", "slide")
-    if type(users) is not int or not 1 <= users <= 20:
-        raise ValueError("users must be an integer from 1 to 20")
+    if type(users) is not int or not 1 <= users <= MAX_LOAD_USERS:
+        raise ValueError(f"users must be an integer from 1 to {MAX_LOAD_USERS}")
     if type(tasks_per_user) is not int or not 1 <= tasks_per_user <= 10:
         raise ValueError("tasks_per_user must be an integer from 1 to 10")
-    if users * tasks_per_user > 100:
-        raise ValueError("users * tasks_per_user must not exceed 100")
+    if users * tasks_per_user > MAX_LOAD_TASKS:
+        raise ValueError(f"users * tasks_per_user must not exceed {MAX_LOAD_TASKS}")
     if type(stagger_seconds) not in (int, float) or not 0 <= stagger_seconds <= 2:
         raise ValueError("stagger_seconds must be a number from 0 to 2")
     if not isinstance(workload, str) or workload not in LOAD_WORKLOADS:
@@ -459,6 +517,56 @@ def run_slide_load_experiment(users: int, tasks_per_user: int, stagger_seconds: 
     if not isinstance(report, dict):
         raise RuntimeError("sandbox load test returned an invalid report")
     return report
+
+
+AGENT_TASK_PLANS = {
+    "slide": ["Đọc template slide", "Chạy trình tạo slide", "Kiểm tra đủ 5 slide"],
+    "documents": ["Tạo báo cáo 300 đoạn và PDF 10 trang", "Đọc lại tài liệu", "Kiểm tra số trang và nội dung"],
+    "data": ["Tạo CSV 200.000 dòng có dữ liệu lỗi", "Làm sạch và tổng hợp theo vùng", "Vẽ và kiểm tra biểu đồ"],
+    "code": ["Sinh module phân tích Python", "Sinh bộ kiểm thử", "Chạy và xác nhận 8 test"],
+    "images": ["Tạo 12 ảnh Full HD", "Resize ảnh", "Ghép và kiểm tra contact sheet"],
+    "search": ["Tạo 5.000 file", "Tìm marker trong nội dung", "Kiểm tra số kết quả và checksum"],
+    "workflow": ["Phân tích dữ liệu", "Tạo biểu đồ và báo cáo", "Sinh code và chạy test"],
+}
+
+
+def execute_agent_task(workload: str) -> dict[str, Any]:
+    if workload not in AGENT_TASKS:
+        raise ValueError("task must be one of slide, documents, data, code, images, search, workflow")
+    try:
+        runner = AGENT_TASK_RUNNER_FILE.read_text(encoding="utf-8")
+        worker = AGENT_WORKLOAD_FILE.read_bytes()
+        slide = SLIDE_TEMPLATE_FILE.read_bytes()
+    except OSError as error:
+        raise RuntimeError(f"cannot read agent task sources: {error}") from error
+    run_id = secrets.token_hex(6)
+    output_dir = f"/output/agent-runs/{run_id}"
+    command = (f"python3 -u -c {shlex.quote(runner)} {shlex.quote(workload)} {run_id} "
+               f"{shlex.quote(base64.b64encode(worker).decode('ascii'))} "
+               f"{shlex.quote(base64.b64encode(slide).decode('ascii'))}")
+    process = run_process_capture(command, "/output", measure=True)
+    if process["exit_code"] != 0:
+        raise RuntimeError(process["stderr"][-1000:] or f"agent task exited with code {process['exit_code']}")
+    try:
+        report = json.loads(process["stdout"])
+    except json.JSONDecodeError as error:
+        raise RuntimeError("agent task returned invalid JSON") from error
+    if (not isinstance(report, dict) or report.get("workload") != workload
+            or report.get("output_dir") != output_dir or not isinstance(report.get("artifacts"), list)):
+        raise RuntimeError("agent task returned an invalid report")
+    for artifact in report["artifacts"]:
+        if (not isinstance(artifact, dict) or not isinstance(artifact.get("path"), str)
+                or not artifact["path"].startswith(output_dir + "/")):
+            raise RuntimeError("agent task returned an invalid artifact path")
+    return {
+        "ok": True,
+        "task": workload,
+        "run_id": run_id,
+        "output_dir": output_dir,
+        "plan": AGENT_TASK_PLANS[workload],
+        "report": report,
+        "metrics": process.get("metrics"),
+    }
 
 
 def to_sandbox_call(tool_call: Any) -> dict[str, Any]:
@@ -604,6 +712,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/api/sandbox/provision":
                 self.provision()
+            elif parsed.path == "/api/agent/run-task":
+                self.run_agent_task()
             elif parsed.path == "/api/agent/plan":
                 body = self.read_json()
                 prompt = body.get("prompt")
@@ -742,6 +852,7 @@ class Handler(BaseHTTPRequestHandler):
             })
         try:
             run_command_for_setup("mkdir -p /output /scratch")
+            memory_limit = verify_sandbox_memory_limit()
         except RuntimeError as error:
             try:
                 remote_json_request("DELETE", f"/sandboxes/{quote(sandbox_id, safe='')}")
@@ -755,7 +866,12 @@ class Handler(BaseHTTPRequestHandler):
                 "detail": str(error),
             })
             return
-        self.send_json(201, {"ok": True, "created_at": state["created_at"]})
+        self.send_json(201, {
+            "ok": True,
+            "created_at": state["created_at"],
+            "memory_limit_bytes": memory_limit,
+            "memory_limit_gib": round(memory_limit / (1024 ** 3), 2),
+        })
 
     def exec_command(self) -> None:
         if config_error():
@@ -796,6 +912,28 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             response.close()
 
+    def run_agent_task(self) -> None:
+        if config_error():
+            self.send_json(503, {"error": config_error()})
+            return
+        require_sandbox_id()
+        body = self.read_json()
+        workload = body.get("task")
+        if not isinstance(workload, str) or workload not in AGENT_TASKS:
+            raise ValueError("task must be one of slide, documents, data, code, images, search, workflow")
+        if not agent_task_lock.acquire(blocking=False):
+            self.send_json(409, {"error": "another agent task is already running"})
+            return
+        try:
+            try:
+                result = execute_agent_task(workload)
+            except RuntimeError as error:
+                self.send_json(502, {"error": "agent task failed inside sandbox", "detail": str(error)})
+                return
+            self.send_json(200, result)
+        finally:
+            agent_task_lock.release()
+
     def run_benchmarks(self) -> None:
         error = config_error()
         if error:
@@ -806,7 +944,7 @@ class Handler(BaseHTTPRequestHandler):
         if (not isinstance(tasks, list) or not tasks or len(tasks) > len(BENCHMARK_TASKS)
                 or any(not isinstance(task, str) or task not in BENCHMARK_TASKS for task in tasks)
                 or len(set(tasks)) != len(tasks)):
-            raise ValueError("tasks must be a non-empty list of distinct cpu, memory, disk, mixed")
+            raise ValueError("tasks must be a non-empty list of distinct cpu, memory, disk, mixed, agent")
         require_sandbox_id()
         if not benchmark_lock.acquire(blocking=False):
             self.send_json(409, {"error": "a benchmark suite is already running"})

@@ -1,7 +1,7 @@
 # Sandbox Agent demo
 
-`sandbox_agent.html` + `sandbox_agent_server.py` provide a local simulated agent
-entry point. The backend follows the lifecycle and runtime routes in
+`sandbox_agent.html` + `sandbox_agent_server.py` provide a local agent UI whose
+tasks execute in a real CubeSandbox. The backend follows the lifecycle and runtime routes in
 `sandbox_api.md` and `backend-exec-design (2).md`. The browser does not receive
 the sandbox ID, routing domain, or access tokens.
 
@@ -29,10 +29,38 @@ it only when needed:
 export SANDBOX_TEMPLATE_ID='another-existing-template'
 ```
 
-The server rejects a missing or invalid `SANDBOX_API_BASE_URL` at startup.
-Then open <http://127.0.0.1:8787> and click **Provision sandbox**.
+The create API does not accept a per-request memory size, so the selected
+template must define its cgroup limit. After provisioning, the backend verifies
+`memory.max` and immediately rejects and cleans up any sandbox whose limit is
+unlimited or greater than 2 GiB.
 
-The backend's `/api/agent/plan` endpoint is a deterministic mock agent. It
+The server rejects a missing or invalid `SANDBOX_API_BASE_URL` at startup.
+Open <http://127.0.0.1:8787>, create a sandbox, and select an agent task.
+
+## Agent tasks inside CubeSandbox
+
+The UI starts in **Agent task trong CubeSandbox** mode. Each selected task is
+sent through the backend process adapter and executes inside the active remote
+sandbox. The server supplies bounded runner source; the browser cannot submit
+arbitrary task commands through this endpoint. Generated files are retained at
+`/output/agent-runs/{run-id}` so they can be inspected with the file API.
+
+Available tasks are `slide`, `documents`, `data`, `code`, `images`, `search`,
+and `workflow`. They cover slide generation, DOCX/PDF production, CSV analysis
+and charting, code generation plus tests, image processing, shared-corpus search,
+and a combined workflow. Each runner verifies its own result before returning
+a manifest, timing, peak process RAM, and artifact paths.
+
+Agent task API:
+
+```http
+POST /api/agent/run-task
+Content-Type: application/json
+
+{"task":"workflow"}
+```
+
+The manual mode's `/api/agent/plan` endpoint is a deterministic single-step mock. It
 recognizes these examples and sends one action to the matching sandbox route:
 
 ```text
@@ -74,15 +102,26 @@ before treating this as a persistent multiuser agent.
 
 ## Benchmark hardware and tasks
 
-After provisioning, select CPU, RAM, disk, and/or compression under
-**Benchmark sandbox** and click **Chạy benchmark**. The server executes only
-these four predefined tasks; user-supplied shell commands are not accepted by
-the benchmark route. CPU runs for roughly 1.5 seconds, RAM touches and holds
+After provisioning, select CPU, RAM, disk, compression, and/or the realistic
+agent workflow under **Benchmark sandbox** and click **Chạy benchmark**. The
+server executes only these five predefined tasks; user-supplied shell commands
+are not accepted by the benchmark route. CPU runs for roughly 1.5 seconds, RAM touches and holds
 128 MiB for one second, disk writes and reads 32 MiB of temporary data in
 `/scratch`, and compression processes 16 MiB in memory. The disk temporary
 file is closed/unlinked by the runner. `/api/sandbox/exec` also reports peak
 RAM automatically for manually run commands; the preset benchmark reports
 additional per-task CPU and disk statistics.
+
+The `agent` benchmark executes one validated multi-tool workflow: generate and
+aggregate a 150,000-row CSV, create a chart plus a 300-paragraph DOCX and
+10-page PDF, generate an analytics module and run eight tests, process 12 Full
+HD images, and search 5,000 files. Its temporary
+artifacts are removed after measurement. The report includes total and
+per-stage duration, peak RSS, CPU time, process disk I/O, artifact count/bytes,
+and six integrity checks. A final adaptive memory-pressure stage touches up to
+70% of the MicroVM's visible RAM while reserving at least 384 MiB for the
+kernel and background processes. It intentionally does not allocate the full
+2 GiB sandbox limit, which would make an OOM kill likely.
 
 An API client can run a subset:
 
@@ -131,14 +170,16 @@ isolation between authenticated users: the demo has no user accounts.
 
 After provisioning, use **Thử tải agent trong sandbox** in the UI. Choose a
 workload: `slide` (five-slide HTML), `documents` (DOCX plus PDF), `data`
-(30,000-row CSV plus chart), `code` (generate code and run three tests),
-`images` (four images plus contact sheet), `search` (search 1,200 files), or
-`workflow` (CSV analysis, chart, DOCX/PDF report, code tests). The non-slide
+(200,000-row CSV plus chart), `code` (generate an analytics module and run
+eight tests), `images` (12 Full HD images plus contact sheet), `search` (prepare
+one 5,000-document read-only corpus and run distinct queries with citations),
+or `workflow` (150,000-row analysis, chart, long DOCX/PDF report,
+and code tests). The non-slide
 jobs require the libraries listed in `backend-exec-design.md` to be installed
 in the sandbox template. Missing dependencies show as per-task failures.
 
 Set
-`Users` (1–20), `Task / user` (1–10, at most 100 tasks in total), and optional
+`Users` (1–8), `Task / user` (1–10, at most 80 tasks in total), and optional
 `Trễ giữa users` (0–2 seconds). Start with 2 users × 1 task and increase
 gradually; the test intentionally creates several processes at once.
 
@@ -170,6 +211,31 @@ Peak RSS for a task is the maximum observed process peak in its tree, **not**
 the sum of all child processes; use the sandbox cgroup samples to assess total
 memory. If the whole sandbox is killed, the HTTP request may fail before a
 report can be returned. Start with 1 user and increase gradually for heavy
-workloads; up to 20 simulated users / 100 total tasks is a safety bound, not a
+workloads; up to 8 simulated users / 80 total tasks is a safety bound, not a
 promise that the sandbox can handle that many. This is a scripted tool-workload
 simulation, not an LLM agent loop or real multi-user authentication.
+
+## Automated benchmark reports
+
+The web UI now includes **Bộ benchmark tự động** under **Kiểm thử
+sandbox**. Select `quick`, `standard`, or `full`; the browser runs the same
+benchmark and load-test APIs sequentially, shows progress, calculates medians
+and aggregate throughput, assigns a telemetry-aware verdict, and enables JSON
+and Markdown downloads. `standard` runs 65 load tasks. `full` runs 441 load
+tasks and asks for confirmation before starting.
+
+Provision one sandbox in the UI, then run a repeatable matrix without letting
+the client create or destroy that sandbox:
+
+```bash
+python3 -B benchmark_suite_client.py --profile quick
+python3 -B benchmark_suite_client.py --profile standard
+python3 -B benchmark_suite_client.py --profile full
+```
+
+`quick` is a smoke test, `standard` is the recommended reporting run, and
+`full` is a long capacity/stress matrix that reaches eight simulated users.
+Results are written as raw JSON and a readable Markdown report under
+`benchmark-reports/`. Generated reports are git-ignored. The latest reviewed
+Full result, metric definitions, test matrix, and known limitations are in
+`bao-cao-benchmark-full-20260921.md`.

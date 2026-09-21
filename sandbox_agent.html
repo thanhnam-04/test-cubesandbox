@@ -121,100 +121,249 @@
     .toast.show { opacity: 1; transform: translateY(0); }
     @media (max-width: 1180px) { body { min-width: 0; } .app { grid-template-columns: 68px 1fr; } aside { padding-inline: 10px; } .brand { padding-inline: 8px; } .brand > div:last-child, .nav-label, .nav button span, .side-card { display: none; } .nav button { text-align: center; font-size: 18px; } main { padding-inline: 17px; } }
     @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } .hero { align-items: start; gap: 18px; flex-direction: column; } }
+
+    /* Clean, information-first workspace */
+    :root {
+      --ink: #172334;
+      --muted: #66758a;
+      --muted-2: #8b98aa;
+      --line: #e3e8ef;
+      --panel: #ffffff;
+      --bg: #f4f7fb;
+      --green: #16a36a;
+      --amber: #c98516;
+      --red: #d94f5c;
+      --blue: #3e74c5;
+      --shadow: 0 12px 30px rgba(24, 39, 61, .07);
+    }
+    body { min-width: 0; color: var(--ink); background: var(--bg); }
+    .app { display: block; min-height: 100vh; }
+    main { max-width: 1420px; padding: 28px 32px 42px; }
+    .topbar { height: auto; margin-bottom: 22px; gap: 18px; }
+    .brand-inline { display: flex; align-items: center; gap: 11px; }
+    .brand-inline .brand-mark { width: 36px; height: 36px; color: #fff; background: var(--blue); border-radius: 11px; box-shadow: 0 6px 14px rgba(62, 116, 197, .2); }
+    .brand-inline strong { display: block; font-size: 15px; letter-spacing: -.01em; }
+    .brand-inline span:not(.brand-mark) { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .topbar-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    .status-pill { padding: 8px 11px; color: var(--muted); background: #fff; border-color: var(--line); }
+    .dot { width: 7px; height: 7px; }
+    .summary-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 22px; padding: 22px 24px; margin-bottom: 20px; }
+    .summary-copy .eyebrow { color: var(--blue); }
+    .summary-copy h1 { margin: 6px 0 6px; color: var(--ink); font-size: clamp(24px, 3vw, 34px); letter-spacing: -.04em; }
+    .summary-copy p { margin: 0; color: var(--muted); font-size: 13px; }
+    .workspace-state { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-width: 285px; padding: 13px 15px; border: 1px solid #dcebe3; border-radius: 12px; background: #f5fbf7; }
+    .workspace-state strong { display: block; color: var(--ink); font-size: 13px; }
+    .workspace-state span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .workspace-state .status-time { margin: 0; color: var(--muted-2); white-space: nowrap; }
+    .state-dot { width: 10px; height: 10px; background: #b6c1ce; }
+    .state-dot.live { background: var(--green); box-shadow: 0 0 0 4px rgba(22, 163, 106, .12); }
+    .state-label { display: flex; align-items: center; gap: 9px; }
+    .button { color: var(--ink); background: #fff; border-color: #d8e0e9; padding: 10px 13px; font-size: 11px; box-shadow: 0 1px 2px rgba(24, 39, 61, .03); }
+    .button:hover { border-color: #a9bad0; background: #f8fafc; }
+    .button.primary { color: #fff; background: var(--blue); border-color: var(--blue); }
+    .button.primary:hover { background: #3568b5; }
+    .button.danger { color: #b33d4c; border-color: #f0c9ce; background: #fff8f8; }
+    .button.small { padding: 8px 10px; font-size: 10px; white-space: nowrap; }
+    .layout { grid-template-columns: minmax(0, 1.25fr) minmax(360px, .75fr); gap: 20px; }
+    .panel { border: 1px solid var(--line); border-radius: 15px; background: var(--panel); box-shadow: var(--shadow); }
+    .panel-header { padding: 16px 18px; border-bottom-color: var(--line); }
+    .panel-title { color: var(--ink); font-size: 13px; }
+    .panel-meta { color: var(--muted); font-size: 11px; }
+    .chat { min-height: 680px; }
+    .feed { gap: 15px; padding: 20px; max-height: 570px; }
+    .message { gap: 10px; }
+    .avatar { width: 30px; height: 30px; border-radius: 9px; background: #d9f5e7; color: #147c53; }
+    .user .avatar { background: #dce9fb; color: #3568b5; }
+    .bubble { padding: 12px 14px; border-color: var(--line); background: #f7f9fc; }
+    .user .bubble { border-color: #d9e6f7; background: #eef5ff; }
+    .bubble p { color: #304157; font-size: 12px; line-height: 1.55; }
+    .message .time { color: var(--muted-2); font-size: 10px; }
+    .tool-card { margin-left: 40px; border-color: #d7e8df; background: #f6fbf8; }
+    .tool-head { color: #25835b; border-bottom-color: #e0efe7; }
+    .tool-body { color: var(--muted); }
+    .tool-body code { color: #3b5878; }
+    .composer { padding: 15px 17px 17px; border-top-color: var(--line); background: #fbfcfe; }
+    textarea { min-height: 58px; padding: 12px 13px; color: var(--ink); background: #fff; border-color: #d9e1ea; font-size: 12px; }
+    textarea:focus { border-color: #8fb1df; box-shadow: 0 0 0 3px rgba(62, 116, 197, .1); }
+    .send { width: 44px; height: 44px; color: #fff; background: var(--blue); box-shadow: 0 5px 12px rgba(62, 116, 197, .2); }
+    .composer-hint { color: var(--muted-2); font-size: 10px; }
+    .quick-actions { gap: 7px; margin-top: 12px; }
+    .quick { padding: 7px 10px; color: #52647b; border-color: #dbe3ec; background: #fff; font-size: 10px; }
+    .quick:hover { color: var(--blue); border-color: #a9c2e5; background: #f5f9ff; }
+    .right-col { gap: 16px; }
+    .terminal { min-height: 300px; background: #fbfcfe; border-color: var(--line); }
+    .terminal .panel-header { background: #f5f8fc; border-bottom-color: var(--line); }
+    .terminal .panel-title { color: var(--ink); }
+    .terminal .panel-meta { color: var(--muted); }
+    .terminal pre { color: #40546d; background: #fbfcfe; }
+    .terminal .prompt { color: #13865a; }
+    .terminal .stderr { color: #c43f4e; }
+    .terminal .exit { color: #a56a0d; }
+    pre { padding: 15px 17px 18px; min-height: 245px; max-height: 330px; font-size: 11px; line-height: 1.7; }
+    .file-panel .files { padding: 13px 17px 17px; }
+    .file-count { color: var(--muted); font-size: 11px; }
+    .file-row { padding: 10px 2px; border-bottom-color: #edf0f4; }
+    .file-icon { color: var(--amber); }
+    .file-name { color: #33445a; font-size: 11px; }
+    .file-size { color: var(--muted-2); }
+    .file-actions { align-items: stretch; gap: 7px; margin-top: 11px; }
+    .file-actions input, .file-actions select, .load-fields input, .load-fields select { min-width: 0; padding: 9px 10px; color: var(--ink); background: #fff; border: 1px solid #d9e1ea; border-radius: 8px; outline: none; font-size: 11px; }
+    .file-actions input { flex: 1; }
+    .file-actions button { border: 0; }
+    .file-actions button.button { color: #fff; background: var(--blue); border: 1px solid var(--blue); }
+    .file-actions button.button:hover { color: #fff; background: #3568b5; border-color: #3568b5; }
+    .upload-field { display: flex; align-items: center; gap: 7px; min-width: 135px; padding: 0 10px; color: var(--muted); border: 1px solid #d9e1ea; border-radius: 8px; background: #fff; font-size: 10px; }
+    .upload-field input { width: 100%; padding: 7px 0; border: 0; }
+    .advanced-panel { overflow: hidden; }
+    .advanced-panel > summary { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; color: var(--ink); cursor: pointer; font-size: 12px; font-weight: 800; list-style: none; }
+    .advanced-panel > summary::-webkit-details-marker { display: none; }
+    .advanced-panel > summary::after { content: "+"; color: var(--blue); font-size: 18px; font-weight: 400; }
+    .advanced-panel[open] > summary { border-bottom: 1px solid var(--line); }
+    .advanced-panel[open] > summary::after { content: "−"; }
+    .advanced-panel > summary span { margin-left: auto; margin-right: 12px; color: var(--muted); font-size: 10px; font-weight: 500; }
+    .advanced-body { padding: 0 17px 17px; }
+    .advanced-block + .advanced-block { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .advanced-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 11px; }
+    .advanced-heading strong { display: block; color: var(--ink); font-size: 12px; }
+    .advanced-heading small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .check-row, .load-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 13px; color: var(--muted); font-size: 10px; }
+    .load-fields label { display: flex; align-items: center; gap: 5px; }
+    .load-fields select { max-width: 150px; }
+    .load-fields input { width: 54px; }
+    .result-box { min-height: 0; max-height: 250px; margin-top: 12px; padding: 11px 12px; color: #53657b; background: #f7f9fc; border: 1px solid #e8edf3; border-radius: 8px; font-size: 10px; line-height: 1.6; }
+    .suite-controls { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 9px; align-items: end; }
+    .suite-controls label { display: grid; gap: 5px; color: var(--muted); font-size: 10px; }
+    .suite-controls select { width: 100%; padding: 9px 10px; color: var(--ink); background: #fff; border: 1px solid #d9e1ea; border-radius: 8px; outline: none; font-size: 11px; }
+    .suite-note { margin: 9px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .suite-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    .suite-actions .button { padding: 8px 10px; }
+    .suite-progress { height: 6px; margin-top: 12px; overflow: hidden; border-radius: 999px; background: #e9eef5; }
+    .suite-progress span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--blue); transition: width .2s ease; }
+    .suite-verdict { display: inline-flex; margin-top: 11px; padding: 5px 8px; border-radius: 7px; color: #8a5a0d; background: #fff4d9; font-size: 10px; font-weight: 800; }
+    .suite-verdict.pass { color: #147c53; background: #e2f6eb; }
+    .suite-verdict.fail { color: #b34450; background: #fff0f1; }
+    .mini-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+    .toast { right: 22px; bottom: 22px; color: #f5fffa; background: #173b2c; border-color: rgba(22, 163, 106, .4); font-size: 12px; }
+    .mode-switch { display: flex; align-items: center; gap: 7px; padding: 6px 9px; color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 9px; font-size: 11px; }
+    .mode-switch select { color: var(--ink); background: transparent; border: 0; outline: none; font-weight: 700; }
+    .agent-only { display: none; }
+    .agent-mode .agent-only { display: initial; }
+    .agent-mode .quick.agent-only { display: inline-flex; }
+    .agent-mode .manual-only { display: none !important; }
+    .trace-label { display: inline-block; padding: 3px 7px; border-radius: 6px; color: #3265aa; background: #eaf2ff; font-size: 10px; font-weight: 700; }
+    .trace-label.fail { color: #b34450; background: #fff0f1; }
+    .tool-card .tool-body { overflow-wrap: anywhere; white-space: pre-wrap; }
+    .file-row { cursor: pointer; }
+    .file-row:hover { background: #f5f9ff; }
+    button.file-row { width: 100%; border: 0; background: transparent; text-align: left; }
+    @media (max-width: 980px) {
+      main { padding: 22px 18px 32px; }
+      .topbar, .topbar-actions { align-items: flex-start; }
+      .topbar { flex-direction: column; }
+      .topbar-actions { justify-content: flex-start; }
+      .summary-bar { grid-template-columns: 1fr; align-items: start; gap: 14px; }
+      .workspace-state { min-width: 0; }
+      .summary-bar > .button { justify-self: start; }
+      .layout { grid-template-columns: 1fr; }
+      .chat { min-height: 620px; }
+    }
+    @media (max-width: 620px) {
+      .topbar-actions { width: 100%; }
+      .topbar-actions .status-pill { flex: 1; }
+      .topbar-actions .button { flex: 0 0 auto; }
+      .composer-hint { flex-direction: column; gap: 4px; }
+      .file-actions { flex-wrap: wrap; }
+      .file-actions input, .upload-field { width: 100%; flex: 1 1 100%; }
+      .file-actions .button { min-height: 38px; }
+      .advanced-heading { align-items: flex-start; flex-direction: column; }
+    }
   </style>
 </head>
 <body>
   <div class="app">
-    <aside>
-      <div class="brand"><div class="brand-mark">⌁</div><div><strong>orbit / agent</strong><small>sandbox workspace</small></div></div>
-      <div class="nav-label">Workspace</div>
-      <nav class="nav">
-        <button class="active">◈ &nbsp; Agent workspace <span>⌘1</span></button>
-        <button>◌ &nbsp; Run history <span>12</span></button>
-        <button>▱ &nbsp; Saved files</button>
-      </nav>
-      <div class="side-card">
-        <div class="eyebrow">Safety rail</div>
-        <p>Sandbox IDs stay server-side. The browser only sees the agent state and streamed results.</p>
-        <button id="sideProvision">Provision workspace</button>
-      </div>
-    </aside>
-
     <main>
       <div class="topbar">
-        <div class="topbar-left"><span class="crumb">Projects / <b>xml-tool</b></span><span class="status-pill"><i class="dot" id="connectionDot"></i><span id="connectionText">checking control plane</span></span></div>
-        <div class="topbar-right"><span id="clock"></span><button class="top-icon">⋯</button><div class="avatar">B2</div></div>
+        <div class="brand-inline"><span class="brand-mark">⌁</span><div><strong>Sandbox Agent</strong><span>Workspace thực thi an toàn</span></div></div>
+        <div class="topbar-actions"><label class="mode-switch">Chế độ <select id="modeSelect" aria-label="Chọn chế độ"><option value="agent">Agent task trong CubeSandbox</option><option value="manual">Lệnh thủ công</option></select></label><span class="status-pill"><i class="dot" id="connectionDot"></i><span id="connectionText">Đang kiểm tra cấu hình</span></span><button class="button" id="refreshButton">↻ Làm mới</button><button class="button primary" id="provisionButton">＋ Tạo sandbox</button></div>
       </div>
 
-      <section class="hero">
-        <div><div class="eyebrow">Agent workspace / 01</div><h1>Ship files, not friction.</h1><p>A small, observable interface for the sandbox execution loop.</p></div>
-        <div class="hero-actions"><button class="button" id="refreshButton">↻ Refresh state</button><button class="button primary" id="provisionButton">＋ Provision sandbox</button></div>
+      <section class="panel summary-bar">
+        <div class="summary-copy"><div class="eyebrow">CubeSandbox</div><h1 id="workspaceTitle">Chạy agent task trong sandbox</h1><p id="workspaceDescription">Các task được thực thi thật trong CubeSandbox và lưu artifact dưới /output.</p></div>
+        <div class="workspace-state"><div class="state-label"><i class="state-dot" id="sandboxDot"></i><div><strong id="sandboxState">Chưa có sandbox</strong><span id="sandboxDetail">Tạo sandbox để bắt đầu</span></div></div><span class="status-time" id="sandboxTime">—</span></div>
+        <button class="button danger" id="destroyButton" disabled>Hủy sandbox</button>
       </section>
 
       <div class="layout">
         <section class="panel chat">
-          <div class="panel-header"><div><div class="panel-title">Agent giả lập</div><div class="panel-meta">nhận câu nhập và chọn thao tác sandbox</div></div><div class="panel-meta" id="turnState">idle</div></div>
+          <div class="panel-header"><div><div class="panel-title">Trợ lý sandbox</div><div class="panel-meta" id="chatDescription">Chọn một tình huống hoặc nhập yêu cầu</div></div><span class="state-label"><i class="mini-dot"></i><span class="panel-meta" id="turnState">Sẵn sàng</span></span></div>
           <div class="feed" id="feed">
-            <div class="message"><div class="avatar">AI</div><div><div class="bubble"><p>Nhập “liệt kê file”, “kiểm tra LibreOffice”, hoặc dùng /run, /write, /read. Tôi sẽ chọn API sandbox tương ứng.</p></div><div class="time">demo · chưa kết nối LLM</div></div></div>
-            <div class="tool-card"><div class="tool-head"><span class="method">DEMO</span><span>sandbox adapter</span><span class="tool-status">5 API actions</span></div><div class="tool-body">Provision → Process.Start → Files → Destroy<br><code>Sandbox ID và token chỉ giữ ở backend.</code></div></div>
+            <div class="message"><div class="avatar">AI</div><div><div class="bubble"><p>Chọn một task bên dưới. Backend sẽ gửi runner vào CubeSandbox, chạy thật, kiểm tra kết quả và giữ artifact trong /output/agent-runs.</p></div><div class="time">Task có giới hạn · chạy trong CubeSandbox</div></div></div>
           </div>
           <div class="composer">
-            <div class="composer-row"><textarea id="commandInput" placeholder="Ví dụ: liệt kê file, kiểm tra LibreOffice, /run pwd, /write /output/hello.txt\nhello, /read /output/hello.txt"></textarea><button class="send" id="sendButton" title="Run agent action">↑</button></div>
-            <div class="composer-hint"><span>Agent giả lập · một hành động mỗi lần</span><span>Enter gửi · Shift+Enter xuống dòng</span></div>
-            <div class="quick-actions"><button class="quick" data-command="/run pwd">Run pwd</button><button class="quick" data-command="/run find /output -maxdepth 2 -type f -print">List /output</button><button class="quick" data-command="/write /output/agent-note.txt\ncreated from the web agent">Write a file</button><button class="quick" data-command="/read /output/agent-note.txt">Read a file</button></div>
+            <div class="composer-row"><textarea id="commandInput" placeholder="Ví dụ: tạo dữ liệu và biểu đồ trong sandbox..."></textarea><button class="send" id="sendButton" title="Gửi yêu cầu">↑</button></div>
+            <div class="composer-hint"><span>Enter để gửi · Shift+Enter xuống dòng</span><span>Một tác vụ mỗi lần</span></div>
+	            <div class="quick-actions"><button class="quick agent-only" data-task="data" data-command="Phân tích 200.000 dòng dữ liệu và tạo biểu đồ">Dữ liệu lớn + biểu đồ</button><button class="quick agent-only" data-task="documents" data-command="Tạo báo cáo dài DOCX và PDF">Báo cáo dài</button><button class="quick agent-only" data-task="code" data-command="Sinh module phân tích và chạy kiểm thử">Code nhiều hàm + test</button><button class="quick agent-only" data-task="slide" data-command="Tạo slide HTML">Tạo slide</button><button class="quick agent-only" data-task="images" data-command="Xử lý batch ảnh Full HD">Batch 12 ảnh</button><button class="quick agent-only" data-task="search" data-command="Tìm trong corpus 5.000 tài liệu và trả citation">Tìm trong corpus tài liệu</button><button class="quick agent-only" data-task="workflow" data-command="Chạy workflow dữ liệu, tài liệu và code quy mô lớn">Workflow phức tạp</button><button class="quick manual-only" data-command="/run pwd">Thư mục hiện tại</button><button class="quick manual-only" data-command="/run find /output -maxdepth 3 -type f -print">Liệt kê file</button><button class="quick manual-only" data-command="kiểm tra LibreOffice">Kiểm tra LibreOffice</button></div>
           </div>
         </section>
 
         <div class="right-col">
-          <section class="panel sandbox-card">
-            <div class="panel-header" style="padding:0 0 15px;border:0"><div><div class="panel-title">Sandbox control plane</div><div class="panel-meta">every backend operation is traceable</div></div><button class="button danger" id="destroyButton" disabled>Destroy</button></div>
-            <div class="sandbox-state"><div class="state-label"><i class="state-dot" id="sandboxDot"></i><div><strong id="sandboxState">No active sandbox</strong><span id="sandboxDetail">Provision to start an isolated workspace</span></div></div><span class="api-badge" id="sandboxTime">—</span></div>
-            <div class="api-list">
-              <div class="api-row" data-api="provision"><div class="api-icon">＋</div><div class="api-copy"><strong>POST /sandboxes</strong><span>tạo sandbox demo với template đã chọn</span></div><span class="api-badge" id="apiProvision">ready</span></div>
-              <div class="api-row" data-api="exec"><div class="api-icon">›_</div><div class="api-copy"><strong>POST 49983 /process.Process/Start</strong><span>Connect stream: start, data, end</span></div><span class="api-badge" id="apiExec">ready</span></div>
-              <div class="api-row" data-api="read"><div class="api-icon">↓</div><div class="api-copy"><strong>GET 49983 /files</strong><span>read raw file bytes via sandbox domain</span></div><span class="api-badge" id="apiRead">ready</span></div>
-              <div class="api-row" data-api="write"><div class="api-icon">↑</div><div class="api-copy"><strong>POST 49983 /files</strong><span>write raw file bytes via sandbox domain</span></div><span class="api-badge" id="apiWrite">ready</span></div>
-              <div class="api-row" data-api="destroy"><div class="api-icon">×</div><div class="api-copy"><strong>DELETE /sandboxes/{id}</strong><span>hủy sandbox demo</span></div><span class="api-badge" id="apiDestroy">ready</span></div>
-            </div>
-          </section>
-
           <section class="panel terminal">
-            <div class="panel-header"><div class="topbar-left"><span class="terminal-dots"><i></i><i></i><i></i></span><span class="panel-title">live terminal</span></div><span class="panel-meta" id="terminalStatus">waiting</span></div>
-            <pre id="terminal"><span class="prompt">agent@workspace</span> <span style="color:#7f8da3">~</span> $ waiting for a sandbox…</pre>
+            <div class="panel-header"><div><div class="panel-title" id="terminalTitle">Nhật ký CubeSandbox</div><div class="panel-meta" id="terminalDescription">Task, thời gian và kết quả kiểm tra</div></div><span class="panel-meta" id="terminalStatus">Đang chờ</span></div>
+            <pre id="terminal"><span class="prompt">agent@cubesandbox</span> $ Tạo sandbox rồi chọn một task…</pre>
           </section>
 
-          <section class="panel">
-            <div class="panel-header"><div><div class="panel-title">Benchmark sandbox</div><div class="panel-meta">Task riêng · chỉ dùng /scratch · tự dọn file tạm</div></div></div>
-            <div class="files">
-              <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;font-size:11px">
+          <section class="panel file-panel">
+            <div class="panel-header"><div><div class="panel-title">Artifact trong /output</div><div class="panel-meta" id="fileDescription">Kết quả thật từ các agent task</div></div><span class="file-count" id="fileCount">0 file</span></div>
+            <div class="files"><div id="fileList"><div class="panel-meta">Artifact sẽ xuất hiện sau khi task hoàn tất.</div></div><div class="file-actions"><input id="filePath" value="/output/agent-runs/" aria-label="Đường dẫn file" /><button class="button small" id="readButton">Đọc file</button></div><div class="file-actions manual-only"><label class="upload-field"><span>Script Python</span><input id="slideScript" type="file" accept=".py,.txt" aria-label="Script tạo slide" /></label><input id="slideOutput" value="/output/slide_html_dep.html" aria-label="Đường dẫn output slide" /><button class="button small" id="createSlideButton">Tạo slide</button></div></div>
+          </section>
+
+          <details class="panel advanced-panel" open>
+            <summary>Kiểm thử sandbox <span>Benchmark & nhiều user</span></summary>
+            <div class="advanced-body">
+              <div class="advanced-block">
+                <div class="advanced-heading"><div><strong>Benchmark sandbox</strong><small>Đo tài nguyên cơ bản và workflow giống Agent thực tế</small></div><button class="button small" id="benchmarkButton" disabled>Chạy benchmark</button></div>
+                <div class="check-row">
                 <label><input type="checkbox" class="benchmarkTask" value="cpu" checked> CPU (1.5s)</label>
                 <label><input type="checkbox" class="benchmarkTask" value="memory" checked> RAM (128 MiB)</label>
                 <label><input type="checkbox" class="benchmarkTask" value="disk" checked> Disk (32 MiB)</label>
                 <label><input type="checkbox" class="benchmarkTask" value="mixed" checked> Nén dữ liệu (16 MiB)</label>
+                <label><input type="checkbox" class="benchmarkTask" value="agent" checked> Agent thực tế + tải RAM an toàn</label>
+                </div>
+                <pre id="benchmarkResults" class="result-box">Chưa chạy.</pre>
               </div>
-              <button class="button" id="benchmarkButton" disabled>Chạy benchmark</button>
-              <pre id="benchmarkResults" style="min-height:0;max-height:320px;padding:12px 0;white-space:pre-wrap">Chưa chạy. RAM peak là của từng process task, không phải cả sandbox.</pre>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-header"><div><div class="panel-title">Thử tải agent trong sandbox</div><div class="panel-meta">User giả lập · task/process riêng · tối đa 100 task</div></div></div>
-            <div class="files">
-              <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:12px;font-size:11px">
-                <label>Task <select id="loadWorkload"><option value="slide">Tạo slide HTML</option><option value="documents">DOCX + PDF</option><option value="data">CSV + biểu đồ</option><option value="code">Viết code + test</option><option value="images">Xử lý ảnh</option><option value="search">Tìm kiếm file</option><option value="workflow">Workflow hỗn hợp</option></select></label>
-                <label>Users <input id="loadUsers" type="number" min="1" max="20" value="2" style="width:56px"></label>
-                <label>Task / user <input id="loadTasks" type="number" min="1" max="10" value="1" style="width:56px"></label>
-                <label>Trễ giữa users (s) <input id="loadStagger" type="number" min="0" max="2" step="0.1" value="0" style="width:60px"></label>
-              </div>
-              <button class="button" id="loadTestButton" disabled>Chạy thử tải</button>
-              <pre id="loadTestResults" style="min-height:0;max-height:340px;padding:12px 0;white-space:pre-wrap">Chưa chạy. Thí nghiệm chỉ mô phỏng nhiều user trong cùng một sandbox.</pre>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-header"><div><div class="panel-title">/output files</div><div class="panel-meta">file API surface · scoped workspace</div></div><span class="api-badge" id="fileCount">0 files</span></div>
-            <div class="files"><div id="fileList"><div class="panel-meta">No files inspected yet.</div></div><div class="file-actions"><input id="filePath" value="/output/agent-note.txt" aria-label="File path" /><button id="readButton">Read</button></div><div class="file-actions"><input id="slideScript" type="file" accept=".py,.txt" aria-label="Slide generator Python file" /><input id="slideOutput" value="/output/slide_html_dep.html" aria-label="Slide output path" /><button id="createSlideButton">Create slide</button></div></div>
-          </section>
+	              <div class="advanced-block">
+	                <div class="advanced-heading"><div><strong>Thử tải agent</strong><small>Mô phỏng nhiều user trong cùng sandbox</small></div><button class="button small" id="loadTestButton" disabled>Chạy thử tải</button></div>
+                <div class="load-fields">
+	                <label>Task <select id="loadWorkload"><option value="workflow">Workflow phức tạp</option><option value="data">200.000 dòng + biểu đồ</option><option value="documents">DOCX dài + PDF 10 trang</option><option value="code">Module phân tích + 8 test</option><option value="images">Batch 12 ảnh Full HD</option><option value="search">Tìm trong corpus 5.000 tài liệu</option><option value="slide">Tạo slide HTML</option></select></label>
+                <label>Users <input id="loadUsers" type="number" min="1" max="8" value="2"></label>
+                <label>Task / user <input id="loadTasks" type="number" min="1" max="10" value="1"></label>
+                <label>Trễ (s) <input id="loadStagger" type="number" min="0" max="2" step="0.1" value="0"></label>
+                </div>
+	                <pre id="loadTestResults" class="result-box">Chưa chạy.</pre>
+	              </div>
+	              <div class="advanced-block">
+	                <div class="advanced-heading"><div><strong>Bộ benchmark tự động</strong><small>Lặp nhiều lượt, chạy ma trận tải và xuất báo cáo</small></div></div>
+	                <div class="suite-controls">
+	                  <label>Profile
+	                    <select id="suiteProfile">
+	                      <option value="quick">Quick · kiểm tra nhanh</option>
+	                      <option value="standard" selected>Standard · 65 load task</option>
+	                      <option value="full">Full · 441 load task</option>
+	                    </select>
+	                  </label>
+	                  <button class="button primary" id="suiteRunButton" disabled>Chạy profile</button>
+	                </div>
+	                <p class="suite-note" id="suiteDescription">3 lượt tài nguyên + 3 lượt Agent + 9 cấu hình tải. Phù hợp để lấy số liệu báo cáo.</p>
+	                <div class="suite-progress" aria-hidden="true"><span id="suiteProgressBar"></span></div>
+	                <span class="suite-verdict" id="suiteVerdict">Chưa chạy</span>
+	                <pre id="suiteResults" class="result-box">Chọn profile rồi bấm Chạy profile.</pre>
+	                <div class="suite-actions">
+	                  <button class="button small" id="suiteJsonButton" disabled>Tải JSON</button>
+	                  <button class="button small" id="suiteMarkdownButton" disabled>Tải Markdown</button>
+	                </div>
+	              </div>
+	            </div>
+          </details>
         </div>
       </div>
     </main>
@@ -222,7 +371,41 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const state = { active: false, filePaths: new Set(), busy: false };
+	    const taskInfo = {
+      data: { label: "Dữ liệu lớn + biểu đồ", plan: ["Tạo CSV 200.000 dòng có dữ liệu lỗi", "Làm sạch và tổng hợp theo vùng", "Vẽ và kiểm tra biểu đồ"] },
+      documents: { label: "Báo cáo dài", plan: ["Tạo DOCX 300 đoạn", "Tạo PDF 10 trang", "Đọc lại và kiểm tra tài liệu"] },
+      code: { label: "Code nhiều hàm + test", plan: ["Sinh module phân tích", "Sinh test cho nhiều nhánh", "Chạy và xác nhận 8 test"] },
+      slide: { label: "Tạo slide", plan: ["Nạp template", "Tạo slide HTML", "Kiểm tra đủ 5 slide"] },
+      images: { label: "Batch 12 ảnh", plan: ["Tạo 12 ảnh Full HD", "Resize toàn bộ ảnh", "Tạo và kiểm tra contact sheet"] },
+	      search: { label: "Tìm trong corpus tài liệu", plan: ["Chuẩn bị corpus 5.000 tài liệu một lần", "Tìm theo truy vấn trên corpus chỉ-đọc", "Trả citation và kiểm tra checksum"] },
+	      workflow: { label: "Workflow phức tạp", plan: ["Phân tích 150.000 dòng", "Tạo DOCX/PDF dài", "Sinh module và chạy 8 test"] }
+	    };
+	    const suiteWorkloads = ["slide", "data", "documents", "code", "images", "search", "workflow"];
+	    const benchmarkProfiles = {
+	      quick: {
+	        description: "1 lượt tài nguyên + 1 lượt Agent + workflow với 1 và 2 user. Dùng để kiểm tra nhanh.",
+	        basicRounds: 1, agentRounds: 1,
+	        loads: [["workflow", 1, 1, 0.2], ["workflow", 2, 1, 0.2]]
+	      },
+	      standard: {
+	        description: "3 lượt tài nguyên + 3 lượt Agent + 9 cấu hình tải, tổng 65 load task. Phù hợp để lấy số liệu báo cáo.",
+	        basicRounds: 3, agentRounds: 3,
+	        loads: [
+	          ["slide", 4, 3, 0.1], ["data", 2, 2, 0.2], ["documents", 2, 2, 0.2],
+	          ["code", 4, 3, 0.1], ["images", 2, 2, 0.2], ["search", 4, 2, 0.1],
+	          ["workflow", 1, 3, 0.2], ["workflow", 2, 3, 0.2], ["workflow", 4, 3, 0.2]
+	        ]
+	      },
+	      full: {
+	        description: "5 lượt tài nguyên + 5 lượt Agent + 35 cấu hình tải, tổng 441 load task. Đây là stress test dài.",
+	        basicRounds: 5, agentRounds: 5,
+	        loads: suiteWorkloads.flatMap(workload => [1, 2, 4, 6, 8].map(users => [workload, users, 3, 0.2]))
+	      }
+	    };
+	    const state = {
+	      active: false, filePaths: new Map(), busy: false, lastSuite: null, lastSuiteName: null,
+	      mode: sessionStorage.getItem("agentMode") === "manual" ? "manual" : "agent"
+	    };
     const $ = (id) => document.getElementById(id);
     const feed = $("feed");
 
@@ -235,9 +418,34 @@
     function addMessage(text, role = "assistant") { const user = role === "user"; const item = document.createElement("div"); item.className = "message" + (user ? " user" : ""); item.innerHTML = `<div class="avatar">${user ? "YOU" : "AI"}</div><div><div class="bubble"><p>${escapeHtml(text)}</p></div><div class="time">${now()} · ${user ? "request" : "agent"}</div></div>`; feed.appendChild(item); feed.scrollTop = feed.scrollHeight; }
     function addTool(method, path, status = "running", body = "") { const item = document.createElement("div"); item.className = "tool-card"; item.innerHTML = `<div class="tool-head"><span class="method">${escapeHtml(method)}</span><span>${escapeHtml(path)}</span><span class="tool-status">${escapeHtml(status)}</span></div><div class="tool-body">${body}</div>`; feed.appendChild(item); feed.scrollTop = feed.scrollHeight; return item; }
     function updateTool(item, status, body) { item.querySelector(".tool-status").textContent = status; item.querySelector(".tool-body").innerHTML = body; }
-    function setBusy(value) { state.busy = value; $("sendButton").disabled = value; $("provisionButton").disabled = value; $("sideProvision").disabled = value; $("destroyButton").disabled = value || !state.active; $("benchmarkButton").disabled = value || !state.active; $("loadTestButton").disabled = value || !state.active; $("turnState").textContent = value ? "working" : "idle"; }
+	    function setBusy(value) { state.busy = value; $("modeSelect").disabled = value; $("sendButton").disabled = value; $("readButton").disabled = value; $("provisionButton").disabled = value || state.active; $("destroyButton").disabled = value || !state.active; $("benchmarkButton").disabled = value || !state.active; $("loadTestButton").disabled = value || !state.active; $("suiteRunButton").disabled = value || !state.active; $("suiteProfile").disabled = value; $("suiteJsonButton").disabled = value || !state.lastSuite; $("suiteMarkdownButton").disabled = value || !state.lastSuite; $("turnState").textContent = value ? "Đang xử lý" : "Sẵn sàng"; }
     function writeTerminal(text, kind = "normal") { const terminal = $("terminal"); const line = document.createElement("span"); line.className = kind; line.textContent = text; terminal.appendChild(document.createTextNode("\n")); terminal.appendChild(line); terminal.scrollTop = terminal.scrollHeight; }
     function resetTerminal(command) { $("terminal").innerHTML = `<span class="prompt">agent@workspace</span> <span style="color:#7f8da3">/output</span> $ ${escapeHtml(command)}`; $("terminalStatus").textContent = "streaming"; }
+
+    function applyMode() {
+      const agentMode = state.mode === "agent";
+      document.body.classList.toggle("agent-mode", agentMode);
+      $("modeSelect").value = state.mode;
+      $("workspaceTitle").textContent = agentMode ? "Chạy agent task trong sandbox" : "Điều khiển sandbox thủ công";
+      $("workspaceDescription").textContent = agentMode ? "Các task được thực thi thật trong CubeSandbox và lưu artifact dưới /output." : "Gửi lệnh, xem log và quản lý file trong sandbox.";
+      $("terminalTitle").textContent = agentMode ? "Nhật ký CubeSandbox" : "Terminal";
+      $("terminalDescription").textContent = agentMode ? "Task, thời gian và kết quả kiểm tra" : "Log lệnh đang chạy";
+      $("chatDescription").textContent = agentMode ? "Chọn một agent task thực tế" : "Nhập yêu cầu hoặc dùng /run, /read, /write";
+      $("commandInput").placeholder = agentMode ? "Ví dụ: tạo dữ liệu và biểu đồ trong sandbox..." : "Ví dụ: /run pwd, /read /output/file.txt...";
+      renderFiles();
+    }
+
+    function inferTask(prompt) {
+      const value = prompt.toLowerCase();
+      if (value.includes("slide") || value.includes("trình chiếu")) return "slide";
+      if (value.includes("docx") || value.includes("pdf") || value.includes("tài liệu") || value.includes("báo cáo")) return "documents";
+      if (value.includes("ảnh") || value.includes("image") || value.includes("photo")) return "images";
+      if (value.includes("tìm") || value.includes("search")) return "search";
+      if (value.includes("code") || value.includes("test") || value.includes("mã")) return "code";
+      if (value.includes("workflow") || value.includes("tổng hợp")) return "workflow";
+      if (value.includes("data") || value.includes("csv") || value.includes("dữ liệu") || value.includes("biểu đồ")) return "data";
+      return null;
+    }
 
     async function api(path, options = {}) {
       const response = await fetch(path, options);
@@ -258,28 +466,47 @@
       try {
         const status = await api("/api/status");
         $("connectionDot").className = "dot " + (status.configured ? "live" : "off");
-        $("connectionText").textContent = status.configured ? (status.template_configured ? "control plane configured" : "template ID missing") : "control plane not configured";
+        $("connectionText").textContent = status.configured ? (status.template_configured ? "Sandbox thật: đã cấu hình" : "Thiếu template") : "Sandbox thật: chưa cấu hình";
         state.active = status.active;
+        state.createdAt = status.created_at;
         $("sandboxDot").className = "state-dot" + (state.active ? " live" : "");
-        $("sandboxState").textContent = state.active ? "Workspace is live" : "No active sandbox";
-        $("sandboxDetail").textContent = state.active ? "Sandbox đang chạy; ID và token giữ ở backend" : "Provision to start an isolated workspace";
+        $("sandboxState").textContent = state.active ? "CubeSandbox đang hoạt động" : "Chưa có CubeSandbox";
+        $("sandboxDetail").textContent = state.active ? "Agent task sẽ chạy trong /output" : "Tạo sandbox để chạy task thật";
         $("sandboxTime").textContent = status.created_at ? new Date(status.created_at).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : "—";
+        applyMode();
+        $("provisionButton").disabled = state.active || state.busy;
         $("destroyButton").disabled = !state.active || state.busy;
-        $("benchmarkButton").disabled = !state.active || state.busy;
-        $("loadTestButton").disabled = !state.active || state.busy;
+	        $("benchmarkButton").disabled = !state.active || state.busy;
+	        $("loadTestButton").disabled = !state.active || state.busy;
+	        $("suiteRunButton").disabled = !state.active || state.busy;
       } catch (error) { toast(error.message, true); }
     }
 
     async function provision() {
-      if (state.busy) return; setBusy(true); const tool = addTool("POST", "/sandboxes", "provisioning", "<code>templateID → server configuration</code>"); markApi("provision", "running");
-      try { await api("/api/sandbox/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); updateTool(tool, "201 created", "Workspace roots initialized. Sandbox ID retained by backend."); markApi("provision"); addMessage("Sandbox đã sẵn sàng. Hãy nhập một câu hoặc lệnh mẫu để thử."); toast("Sandbox is live"); await refreshStatus(); }
-      catch (error) { updateTool(tool, "error", `<span class="stderr">${escapeHtml(error.message)}</span>`); markApi("provision", "error"); addMessage("Provision failed: " + error.message); toast(error.message, true); }
-      finally { setBusy(false); await refreshStatus(); }
+      if (state.busy) return false;
+      setBusy(true);
+      const tool = addTool("POST", "/sandboxes", "đang tạo", "<code>templateID → CubeSandbox</code>");
+      let created = false;
+      try {
+        const result = await api("/api/sandbox/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        updateTool(tool, "đã tạo", `Workspace /output và /scratch đã sẵn sàng.<br>RAM giới hạn: <strong>${escapeHtml(result.memory_limit_gib)} GiB</strong>`);
+        addMessage(`CubeSandbox đã sẵn sàng với giới hạn RAM ${result.memory_limit_gib} GiB. Agent có thể bắt đầu chạy task.`);
+        toast("Sandbox đã sẵn sàng");
+        created = true;
+      } catch (error) {
+        updateTool(tool, "lỗi", `<span class="stderr">${escapeHtml(error.message)}</span>`);
+        addMessage("Không tạo được CubeSandbox: " + error.message);
+        toast(error.message, true);
+      } finally {
+        setBusy(false);
+        await refreshStatus();
+      }
+      return created && state.active;
     }
 
     async function destroy() {
       if (!state.active || state.busy) return; setBusy(true); const tool = addTool("DELETE", "/sandboxes/{id}", "destroying", "<code>cleanup → mapping cleared</code>"); markApi("destroy", "running");
-      try { await api("/api/sandbox", { method: "DELETE" }); updateTool(tool, "204 cleaned", "Sandbox destroyed; local mapping cleared."); markApi("destroy"); addMessage("Sandbox đã được hủy. Tạo sandbox mới để tiếp tục."); toast("Sandbox destroyed"); }
+      try { await api("/api/sandbox", { method: "DELETE" }); state.filePaths.clear(); renderFiles(); updateTool(tool, "204 cleaned", "Sandbox destroyed; local mapping cleared."); markApi("destroy"); addMessage("Sandbox đã được hủy. Tạo sandbox mới để tiếp tục."); toast("Sandbox destroyed"); }
       catch (error) { updateTool(tool, "error", `<span class="stderr">${escapeHtml(error.message)}</span>`); markApi("destroy", "error"); toast(error.message, true); }
       finally { setBusy(false); await refreshStatus(); }
     }
@@ -306,15 +533,33 @@
     async function writeFile(path, content) {
       if (!state.active) { toast("Provision a sandbox first", true); return; }
       const tool = addTool("POST", "49983 /files", "writing", `<code>path: ${escapeHtml(path)}</code>`); markApi("write", "running");
-      try { const result = await api(`/api/sandbox/files?path=${encodeURIComponent(path)}`, { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: content }); updateTool(tool, "200 written", `<code>${escapeHtml(path)}</code><br>${result.bytes} bytes moved through backend`); markApi("write"); state.filePaths.add(path); renderFiles(); addMessage(`Wrote ${path}. It now exists in the sandbox /output workspace.`); toast("File written"); }
+      try { const result = await api(`/api/sandbox/files?path=${encodeURIComponent(path)}`, { method: "POST", headers: { "Content-Type": "text/plain; charset=utf-8" }, body: content }); updateTool(tool, "200 written", `<code>${escapeHtml(path)}</code><br>${result.bytes} bytes moved through backend`); markApi("write"); state.filePaths.set(path, result.bytes); renderFiles(); addMessage(`Wrote ${path}. It now exists in the sandbox /output workspace.`); toast("File written"); }
       catch (error) { updateTool(tool, "error", `<span class="stderr">${escapeHtml(error.message)}</span>`); markApi("write", "error"); toast(error.message, true); }
     }
 
     async function readFile(path) {
       if (!state.active) { toast("Provision a sandbox first", true); return; }
       const tool = addTool("GET", "49983 /files", "reading", `<code>path: ${escapeHtml(path)}</code>`); markApi("read", "running");
-      try { const response = await fetch(`/api/sandbox/files?path=${encodeURIComponent(path)}`); const text = await response.text(); if (!response.ok) throw new Error(text); updateTool(tool, "200 read", `<code>${escapeHtml(text.slice(0, 1200))}${text.length > 1200 ? "…" : ""}</code>`); markApi("read"); state.filePaths.add(path); renderFiles(); addMessage(`Đã đọc ${path}; nội dung được hiển thị trong tool result.`); toast("File read"); }
+      try { const response = await fetch(`/api/sandbox/files?path=${encodeURIComponent(path)}`); const text = await response.text(); if (!response.ok) throw new Error(text); updateTool(tool, "200 read", `<code>${escapeHtml(text.slice(0, 1200))}${text.length > 1200 ? "…" : ""}</code>`); markApi("read"); state.filePaths.set(path, new Blob([text]).size); renderFiles(); addMessage(`Đã đọc ${path}; nội dung được hiển thị trong tool result.`); toast("File read"); }
       catch (error) { updateTool(tool, "error", `<span class="stderr">${escapeHtml(error.message)}</span>`); markApi("read", "error"); toast(error.message, true); }
+    }
+
+    function openArtifact(path) {
+      const extension = path.split(".").pop().toLowerCase();
+      if (["html", "htm", "pdf", "png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
+        window.open(`/api/sandbox/files?path=${encodeURIComponent(path)}`, "_blank", "noopener");
+        addMessage(`Đã mở bản xem trước ${path} trong tab mới.`);
+        return;
+      }
+      if (["docx", "xlsx", "pptx", "zip"].includes(extension)) {
+        const link = document.createElement("a");
+        link.href = `/api/sandbox/files?path=${encodeURIComponent(path)}`;
+        link.download = path.split("/").pop();
+        link.click();
+        addMessage(`Đang tải artifact ${path}.`);
+        return;
+      }
+      readFile(path);
     }
 
     async function createSlide() {
@@ -330,7 +575,7 @@
         const preview = `${result.preview_url}`;
         const peak = result.result?.metrics?.peak_rss_kb;
         const ram = peak == null ? "RAM peak không đo được" : `RAM peak: ${(peak / 1024).toFixed(1)} MiB`;
-        updateTool(tool, "200 created", `<code>${escapeHtml(result.artifact_path)} · ${result.bytes} bytes · ${escapeHtml(ram)}</code><br><a href="${escapeHtml(preview)}" target="_blank" rel="noopener">Open preview</a>`); state.filePaths.add(result.artifact_path); renderFiles(); addMessage(`Đã tạo slide ${result.artifact_path}. ${ram}. Bấm Open preview để xem.`); toast("Slide created");
+        updateTool(tool, "200 created", `<code>${escapeHtml(result.artifact_path)} · ${result.bytes} bytes · ${escapeHtml(ram)}</code><br><a href="${escapeHtml(preview)}" target="_blank" rel="noopener">Open preview</a>`); state.filePaths.set(result.artifact_path, result.bytes); renderFiles(); addMessage(`Đã tạo slide ${result.artifact_path}. ${ram}. Bấm Open preview để xem.`); toast("Slide created");
       } catch (error) { updateTool(tool, "error", `<span class="stderr">${escapeHtml(error.message)}</span>`); toast(error.message, true); }
       finally { setBusy(false); await refreshStatus(); }
     }
@@ -345,8 +590,10 @@
       try {
         const data = await api("/api/sandbox/benchmarks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tasks }) });
         const hw = data.hardware;
-        const lines = [
-          `CPU thấy: ${hw.logical_cpus_visible ?? "n/a"} · quota: ${hw.cpu_quota_cores ?? "không rõ"} core`,
+	        const cpuQuota = hw.cpu_quota_status === "unlimited" ? "không giới hạn" :
+	          hw.cpu_quota_cores != null ? `${hw.cpu_quota_cores} core` : "không đọc được";
+	        const lines = [
+          `CPU thấy: ${hw.logical_cpus_visible ?? "n/a"} · quota: ${cpuQuota}`,
           `RAM sandbox: ${mib(hw.memory_current_bytes)} / limit ${mib(hw.memory_limit_bytes)}`,
           `RAM /proc/meminfo: ${mib(hw.memory_available_bytes)} available / ${mib(hw.memory_total_bytes)} total`,
           `/scratch: ${mib(hw.scratch_free_bytes)} free / ${mib(hw.scratch_total_bytes)} total`, ""
@@ -356,6 +603,13 @@
           lines.push(`${result.task.toUpperCase()} · ${result.elapsed_seconds}s · CPU ${result.cpu_percent_one_core}%`,
             `  peak RSS ${mib(result.peak_rss_kb * 1024)} · CPU user/system ${result.cpu_user_seconds}/${result.cpu_system_seconds}s`,
             `  disk read/write ${mib(result.disk_read_bytes)} / ${mib(result.disk_write_bytes)}`);
+          if (result.task === "agent") {
+            lines.push(`  kịch bản: ${result.detail.scenario}`,
+              `  artifact: ${result.detail.artifact_count} file · ${mib(result.detail.artifact_bytes)} · kiểm tra đạt ${result.detail.checks_passed}/6`);
+            for (const stage of result.detail.stages) {
+              lines.push(`    ${stage.name}: ${stage.elapsed_seconds}s · peak RSS tích lũy ${mib(stage.rss_after_kb * 1024)}`);
+            }
+          }
         }
         $("benchmarkResults").textContent = lines.join("\n");
         addMessage(`Đã đo ${data.results.length} task trong sandbox. Xem bảng Benchmark sandbox.`);
@@ -363,14 +617,14 @@
       finally { setBusy(false); }
     }
 
-    async function runSlideLoadTest() {
+	    async function runSlideLoadTest() {
       if (!state.active || state.busy) return;
       const workload = $("loadWorkload").value;
       const users = Number($("loadUsers").value);
       const tasks_per_user = Number($("loadTasks").value);
       const stagger_seconds = Number($("loadStagger").value);
-      if (!Number.isInteger(users) || users < 1 || users > 20 || !Number.isInteger(tasks_per_user) || tasks_per_user < 1 || tasks_per_user > 10 || users * tasks_per_user > 100 || !Number.isFinite(stagger_seconds) || stagger_seconds < 0 || stagger_seconds > 2) {
-        toast("Giới hạn: 1–20 users, 1–10 task/user, tối đa 100 task, trễ 0–2 giây", true); return;
+      if (!Number.isInteger(users) || users < 1 || users > 8 || !Number.isInteger(tasks_per_user) || tasks_per_user < 1 || tasks_per_user > 10 || users * tasks_per_user > 80 || !Number.isFinite(stagger_seconds) || stagger_seconds < 0 || stagger_seconds > 2) {
+        toast("Giới hạn an toàn 2 GiB: 1–8 users, 1–10 task/user, tối đa 80 task, trễ 0–2 giây", true); return;
       }
       setBusy(true);
       $("loadTestResults").textContent = `Đang chạy ${users} users × ${tasks_per_user} task (${workload}) trong sandbox...`;
@@ -379,26 +633,289 @@
         const report = data.report;
         const lines = [
           `${report.workload} · ${report.simulated_users} users × ${report.tasks_per_user} task · thành công ${report.succeeded}/${report.requested_tasks} · lỗi ${report.failed}`,
-          `Tổng ${report.total_seconds}s · đồng thời tối đa ${report.max_concurrent_tasks} task · trễ ${report.stagger_seconds}s/user`,
+          `Tổng ${report.total_seconds}s · đồng thời ${report.max_concurrent_tasks}/${report.configured_parallel_limit} task · trễ ${report.stagger_seconds}s/user`,
           `Latency p50/p95: ${report.latency_p50_seconds ?? "n/a"}/${report.latency_p95_seconds ?? "n/a"}s`,
           `Task RAM peak lớn nhất: ${report.max_task_peak_rss_kb == null ? "n/a" : mib(report.max_task_peak_rss_kb * 1024)}`,
           `RAM sandbox trước / peak lấy mẫu / sau / giới hạn: ${mib(report.sandbox_memory_before_bytes)} / ${mib(report.sandbox_memory_peak_sampled_bytes)} / ${mib(report.sandbox_memory_after_bytes)} / ${mib(report.sandbox_memory_limit_bytes)}`,
-          `OOM kill trong lúc chạy: ${report.sandbox_oom_kills_during_run ?? "n/a"}`, ""
-        ];
+	          `OOM kill trong lúc chạy: ${report.sandbox_oom_kills_during_run ?? "n/a"}`, ""
+	        ];
+	        if (report.shared_input_files != null) {
+	          lines.splice(2, 0, `Corpus dùng chung: ${report.shared_input_files} file · ${mib(report.shared_input_bytes)} · setup ${report.shared_input_setup_seconds}s`);
+	        }
         for (const item of report.results) {
           lines.push(`User ${item.user} · task ${item.task}: ${item.ok ? "OK" : "LỖI"} · ${item.elapsed_seconds}s · RAM ${item.peak_rss_kb == null ? "n/a" : mib(item.peak_rss_kb * 1024)}${item.details ? ` · ${JSON.stringify(item.details)}` : ""}${item.error ? ` · ${item.error}` : ""}`);
         }
         $("loadTestResults").textContent = lines.join("\n");
         addMessage(`Thử tải ${report.workload} trong sandbox: ${report.succeeded}/${report.requested_tasks} task thành công; RAM sandbox peak lấy mẫu ${mib(report.sandbox_memory_peak_sampled_bytes)}.`);
       } catch (error) { $("loadTestResults").textContent = error.message; toast(error.message, true); }
-      finally { setBusy(false); }
+	      finally { setBusy(false); }
+	    }
+
+	    function median(values) {
+	      const ordered = values.filter(Number.isFinite).sort((a, b) => a - b);
+	      if (!ordered.length) return null;
+	      const middle = Math.floor(ordered.length / 2);
+	      return ordered.length % 2 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
+	    }
+
+	    function rounded(value, digits = 3) {
+	      return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+	    }
+
+	    function suiteStatistics(report) {
+	      const loadReports = report.load_runs.map(item => item.report).filter(Boolean);
+	      const requested = loadReports.reduce((sum, item) => sum + (item.requested_tasks || 0), 0);
+	      const succeeded = loadReports.reduce((sum, item) => sum + (item.succeeded || 0), 0);
+	      const loadSeconds = loadReports.reduce((sum, item) => sum + (item.total_seconds || 0), 0);
+	      const successRate = requested ? 100 * succeeded / requested : null;
+	      const throughput = loadSeconds ? succeeded / loadSeconds : null;
+	      const telemetryComplete = loadReports.length > 0 && loadReports.every(item =>
+	        item.sandbox_memory_peak_sampled_bytes != null && item.sandbox_oom_kills_during_run != null);
+	      let verdict = "ĐẠT";
+	      if (report.errors.length || successRate !== 100) verdict = "CẦN XEM LẠI";
+	      else if (!telemetryComplete) verdict = "ĐẠT CÓ ĐIỀU KIỆN";
+	      return { requested, succeeded, successRate, throughput, telemetryComplete, verdict };
+	    }
+
+	    function suiteTaskMedian(report, task) {
+	      const values = report.basic_runs.flatMap(run => run.results || [])
+	        .filter(item => item.task === task && !item.error).map(item => item.elapsed_seconds);
+	      return rounded(median(values));
+	    }
+
+	    function suiteAgentMedian(report) {
+	      const values = report.agent_runs.flatMap(run => run.results || [])
+	        .filter(item => item.task === "agent" && !item.error).map(item => item.elapsed_seconds);
+	      return rounded(median(values));
+	    }
+
+	    function renderSuiteReport(report) {
+	      const stats = suiteStatistics(report);
+	      const lines = [
+	        `PROFILE ${report.profile.toUpperCase()} · ${report.elapsed_seconds}s`,
+	        `Kết luận: ${stats.verdict}`,
+	        `Load test: ${stats.succeeded}/${stats.requested} task · thành công ${stats.successRate == null ? "n/a" : stats.successRate.toFixed(1) + "%"}`,
+	        `Throughput tổng hợp: ${stats.throughput == null ? "n/a" : stats.throughput.toFixed(3) + " task/s"}`,
+	        `Telemetry RAM cgroup/OOM: ${stats.telemetryComplete ? "đầy đủ" : "chưa đầy đủ"}`,
+	        "",
+	        "MEDIAN THEO TASK",
+	        `CPU ${suiteTaskMedian(report, "cpu") ?? "n/a"}s · RAM ${suiteTaskMedian(report, "memory") ?? "n/a"}s · Disk ${suiteTaskMedian(report, "disk") ?? "n/a"}s · Mixed ${suiteTaskMedian(report, "mixed") ?? "n/a"}s`,
+	        `Agent tổng hợp ${suiteAgentMedian(report) ?? "n/a"}s`,
+	        "",
+	        "MA TRẬN LOAD TEST"
+	      ];
+	      for (const item of report.load_runs) {
+	        const data = item.report;
+	        if (!data) { lines.push(`${item.workload} · ${item.users} user · LỖI: ${item.error}`); continue; }
+	        const throughput = data.total_seconds ? data.succeeded / data.total_seconds : null;
+	        lines.push(`${data.workload} · ${data.simulated_users} user × ${data.tasks_per_user} task · ${data.succeeded}/${data.requested_tasks} OK · setup ${data.shared_input_setup_seconds || 0}s · p50/p95 ${data.latency_p50_seconds ?? "n/a"}/${data.latency_p95_seconds ?? "n/a"}s · ${throughput == null ? "n/a" : throughput.toFixed(3)} task/s`);
+	      }
+	      if (report.errors.length) lines.push("", "LỖI", ...report.errors.map(item => `- ${item}`));
+	      $("suiteResults").textContent = lines.join("\n");
+	      const verdict = $("suiteVerdict");
+	      verdict.textContent = stats.verdict;
+	      verdict.className = "suite-verdict " + (stats.verdict === "ĐẠT" ? "pass" : stats.verdict === "CẦN XEM LẠI" ? "fail" : "");
+	    }
+
+	    function suiteMarkdown(report) {
+	      const stats = suiteStatistics(report);
+	      const hw = report.hardware || {};
+	      const lines = [
+	        "# Báo cáo benchmark CubeSandbox tự động",
+	        "",
+	        `- Profile: ${report.profile}`,
+	        `- Bắt đầu: ${report.started_at}`,
+	        `- Kết thúc: ${report.finished_at}`,
+	        `- Tổng thời gian: ${report.elapsed_seconds} giây`,
+	        `- Kết luận: **${stats.verdict}**`,
+	        "",
+	        "## Môi trường",
+	        "",
+	        "| Thông số | Giá trị |",
+	        "|---|---:|",
+	        `| Logical CPU | ${hw.logical_cpus_visible ?? "n/a"} |`,
+	        `| CPU quota | ${hw.cpu_quota_status === "unlimited" ? "Không giới hạn" : (hw.cpu_quota_cores ?? "Không đọc được")} |`,
+	        `| RAM total | ${mib(hw.memory_total_bytes)} |`,
+	        `| Cgroup RAM limit | ${mib(hw.memory_limit_bytes)} |`,
+	        `| Scratch free / total | ${mib(hw.scratch_free_bytes)} / ${mib(hw.scratch_total_bytes)} |`,
+	        "",
+	        "## Median benchmark",
+	        "",
+	        "| Task | Median |",
+	        "|---|---:|",
+	        `| CPU | ${suiteTaskMedian(report, "cpu") ?? "n/a"} s |`,
+	        `| Memory | ${suiteTaskMedian(report, "memory") ?? "n/a"} s |`,
+	        `| Disk | ${suiteTaskMedian(report, "disk") ?? "n/a"} s |`,
+	        `| Mixed | ${suiteTaskMedian(report, "mixed") ?? "n/a"} s |`,
+	        `| Agent | ${suiteAgentMedian(report) ?? "n/a"} s |`,
+	        "",
+	        "## Ma trận nhiều user",
+	        "",
+	        "| Workload | Users | Task/user | OK/Total | Setup (s) | Tổng (s) | p50/p95 (s) | Throughput | Peak task RAM | Peak sandbox/limit | OOM |",
+	        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+	      ];
+	      for (const item of report.load_runs) {
+	        const data = item.report || {};
+	        const throughput = data.total_seconds ? data.succeeded / data.total_seconds : null;
+	        lines.push(`| ${data.workload || item.workload} | ${data.simulated_users ?? item.users} | ${data.tasks_per_user ?? item.tasks_per_user} | ${data.succeeded ?? "n/a"}/${data.requested_tasks ?? "n/a"} | ${data.shared_input_setup_seconds ?? 0} | ${data.total_seconds ?? "n/a"} | ${data.latency_p50_seconds ?? "n/a"}/${data.latency_p95_seconds ?? "n/a"} | ${throughput == null ? "n/a" : throughput.toFixed(3)} task/s | ${data.max_task_peak_rss_kb == null ? "n/a" : (data.max_task_peak_rss_kb / 1024).toFixed(1) + " MiB"} | ${mib(data.sandbox_memory_peak_sampled_bytes)}/${mib(data.sandbox_memory_limit_bytes)} | ${data.sandbox_oom_kills_during_run ?? "n/a"} |`);
+	      }
+	      lines.push("", "## Tổng hợp", "",
+	        `- Load test thành công: ${stats.succeeded}/${stats.requested} (${stats.successRate == null ? "n/a" : stats.successRate.toFixed(1) + "%"}).`,
+	        `- Throughput tổng hợp: ${stats.throughput == null ? "n/a" : stats.throughput.toFixed(3)} task/s.`,
+	        `- Telemetry RAM cgroup/OOM đầy đủ: ${stats.telemetryComplete ? "có" : "không"}.`,
+	        "- Peak RSS là mức của process/task tree, không phải tổng RAM toàn sandbox."
+	      );
+	      if (report.errors.length) lines.push("", "## Lỗi", "", ...report.errors.map(item => `- ${item}`));
+	      return lines.join("\n") + "\n";
+	    }
+
+	    function suiteFileStamp() {
+	      const date = new Date();
+	      const pad = value => String(value).padStart(2, "0");
+	      return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+	    }
+
+	    function downloadSuite(kind) {
+	      if (!state.lastSuite) return;
+	      const markdown = kind === "markdown";
+	      const content = markdown ? suiteMarkdown(state.lastSuite) : JSON.stringify(state.lastSuite, null, 2);
+	      const blob = new Blob([content], { type: markdown ? "text/markdown;charset=utf-8" : "application/json;charset=utf-8" });
+	      const link = document.createElement("a");
+	      const url = URL.createObjectURL(blob);
+	      link.href = url;
+	      link.download = `${state.lastSuiteName}.${markdown ? "md" : "json"}`;
+	      link.click();
+	      setTimeout(() => URL.revokeObjectURL(url), 1000);
+	    }
+
+	    async function runBenchmarkSuite() {
+	      if (!state.active || state.busy) return;
+	      const profileName = $("suiteProfile").value;
+	      const profile = benchmarkProfiles[profileName];
+	      if (!profile) return;
+	      if (profileName === "full" && !window.confirm("Full chạy 441 load task và có thể mất nhiều thời gian. Tiếp tục?")) return;
+	      state.lastSuite = null;
+	      state.lastSuiteName = null;
+	      $("suiteJsonButton").disabled = true;
+	      $("suiteMarkdownButton").disabled = true;
+	      $("suiteVerdict").className = "suite-verdict";
+	      $("suiteVerdict").textContent = "ĐANG CHẠY";
+	      $("suiteProgressBar").style.width = "0%";
+	      setBusy(true);
+	      const report = {
+	        schema_version: 1, started_at: new Date().toISOString(), finished_at: null,
+	        profile: profileName, base_url: location.origin, hardware: null,
+	        basic_runs: [], agent_runs: [], load_runs: [], errors: []
+	      };
+	      const totalSteps = profile.basicRounds + profile.agentRounds + profile.loads.length;
+	      let completedSteps = 0;
+	      const started = performance.now();
+	      const progress = label => {
+	        $("suiteProgressBar").style.width = `${100 * completedSteps / totalSteps}%`;
+	        $("suiteResults").textContent = `${label}\n${completedSteps}/${totalSteps} bước hoàn tất`;
+	      };
+	      progress(`Chuẩn bị profile ${profileName}...`);
+	      try {
+	        for (let round = 1; round <= profile.basicRounds; round += 1) {
+	          progress(`Đang chạy tài nguyên cơ bản · lượt ${round}/${profile.basicRounds}`);
+	          try {
+	            const data = await api("/api/sandbox/benchmarks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tasks: ["cpu", "memory", "disk", "mixed"] }) });
+	            report.hardware ||= data.hardware;
+	            report.basic_runs.push({ round, results: data.results || [] });
+	            for (const item of data.results || []) if (item.error) report.errors.push(`basic ${round}/${item.task}: ${item.error}`);
+	          } catch (error) { report.errors.push(`basic round ${round}: ${error.message}`); }
+	          completedSteps += 1;
+	        }
+	        for (let round = 1; round <= profile.agentRounds; round += 1) {
+	          progress(`Đang chạy Agent tổng hợp · lượt ${round}/${profile.agentRounds}`);
+	          try {
+	            const data = await api("/api/sandbox/benchmarks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tasks: ["agent"] }) });
+	            report.hardware ||= data.hardware;
+	            report.agent_runs.push({ round, results: data.results || [] });
+	            for (const item of data.results || []) if (item.error) report.errors.push(`agent ${round}: ${item.error}`);
+	          } catch (error) { report.errors.push(`agent round ${round}: ${error.message}`); }
+	          completedSteps += 1;
+	        }
+	        for (const [workload, users, tasksPerUser, staggerSeconds] of profile.loads) {
+	          progress(`Đang thử tải ${workload} · ${users} user × ${tasksPerUser} task`);
+	          const item = { workload, users, tasks_per_user: tasksPerUser, stagger_seconds: staggerSeconds };
+	          try {
+	            const data = await api("/api/sandbox/load-test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item) });
+	            item.report = data.report;
+	            if (data.report.failed) report.errors.push(`load ${workload}/${users} user: ${data.report.failed} task lỗi`);
+	          } catch (error) {
+	            item.error = error.message;
+	            report.errors.push(`load ${workload}/${users} user: ${error.message}`);
+	          }
+	          report.load_runs.push(item);
+	          completedSteps += 1;
+	        }
+	      } finally {
+	        report.elapsed_seconds = rounded((performance.now() - started) / 1000);
+	        report.finished_at = new Date().toISOString();
+	        state.lastSuite = report;
+	        state.lastSuiteName = `cubesandbox-${profileName}-${suiteFileStamp()}`;
+	        $("suiteProgressBar").style.width = "100%";
+	        renderSuiteReport(report);
+	        setBusy(false);
+	      }
+	      const stats = suiteStatistics(report);
+	      addMessage(`Profile ${profileName} hoàn tất: ${stats.succeeded}/${stats.requested} load task thành công; kết luận ${stats.verdict}.`);
+	      toast(`Benchmark ${profileName} hoàn tất`);
+	    }
+
+	    async function runAgentTask(task) {
+      if (!taskInfo[task] || state.busy) return;
+      if (!state.active) {
+        addMessage("Task cần một CubeSandbox đang hoạt động. Đang thử tạo sandbox…");
+        if (!await provision()) return;
+      }
+      const info = taskInfo[task];
+      setBusy(true);
+      $("terminal").textContent = `agent@cubesandbox $ ${task}`;
+      $("terminalStatus").textContent = "Đang chạy";
+      info.plan.forEach((step, index) => writeTerminal(`${index + 1}. ${step}`));
+      const tool = addTool("AGENT", info.label, "đang chạy trong CubeSandbox", info.plan.map((step, index) => `${index + 1}. ${escapeHtml(step)}`).join("<br>"));
+      try {
+        const result = await api("/api/agent/run-task", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task }) });
+        for (const artifact of result.report.artifacts) state.filePaths.set(artifact.path, artifact.bytes);
+        const ram = result.metrics?.peak_rss_kb == null ? "không đo được" : `${(result.metrics.peak_rss_kb / 1024).toFixed(1)} MiB`;
+        const summary = `${result.report.artifact_count} artifact · ${result.report.elapsed_seconds}s · RAM peak ${ram}`;
+        updateTool(tool, "hoàn tất", `<span class="trace-label">đã kiểm tra</span><br><code>${escapeHtml(result.output_dir)}</code><br>${escapeHtml(summary)}<br>${escapeHtml(JSON.stringify(result.report.details))}`);
+        writeTerminal(`✓ Hoàn tất: ${summary}`, "exit");
+        writeTerminal(`Artifact: ${result.output_dir}`);
+        $("terminalStatus").textContent = "Hoàn tất";
+        $("filePath").value = result.report.artifacts[0]?.path || result.output_dir;
+        renderFiles();
+        addMessage(`${info.label} đã chạy thật trong CubeSandbox. ${summary}. Kết quả nằm tại ${result.output_dir}.`);
+        toast("Agent task hoàn tất");
+      } catch (error) {
+        updateTool(tool, "lỗi", `<span class="stderr">${escapeHtml(error.message)}</span>`);
+        writeTerminal(error.message, "stderr");
+        $("terminalStatus").textContent = "Lỗi";
+        addMessage(`Task ${info.label} thất bại trong CubeSandbox: ${error.message}`);
+        toast(error.message, true);
+      } finally { setBusy(false); }
     }
 
-    function renderFiles() { $("fileCount").textContent = `${state.filePaths.size} file${state.filePaths.size === 1 ? "" : "s"}`; $("fileList").innerHTML = state.filePaths.size ? [...state.filePaths].map(path => `<div class="file-row"><span class="file-icon">▧</span><span class="file-name">${escapeHtml(path)}</span><span class="file-size">inspected</span></div>`).join("") : '<div class="panel-meta">No files inspected yet.</div>'; }
-    async function submit() {
+    function renderFiles() {
+      $("fileCount").textContent = `${state.filePaths.size} file`;
+      $("fileList").innerHTML = state.filePaths.size ? [...state.filePaths.entries()].map(([path, bytes]) => `<button type="button" class="file-row" data-path="${escapeHtml(path)}"><span class="file-icon">▧</span><span class="file-name">${escapeHtml(path)}</span><span class="file-size">${bytes == null ? "artifact" : bytes + " B"}</span></button>`).join("") : '<div class="panel-meta">Artifact sẽ xuất hiện sau khi task hoàn tất.</div>';
+    }
+    async function submit(explicitTask = null) {
       if (state.busy) return;
       const input = $("commandInput"); const prompt = input.value; if (!prompt.trim()) return;
-      input.value = ""; addMessage(prompt, "user"); setBusy(true);
+      input.value = ""; addMessage(prompt, "user");
+      if (state.mode === "agent") {
+        const task = explicitTask || inferTask(prompt);
+        if (!task) {
+          addMessage("Chưa xác định được loại task. Hãy chọn: dữ liệu, tài liệu, code, slide, ảnh, tìm kiếm hoặc workflow đầy đủ.");
+          return;
+        }
+        await runAgentTask(task);
+        return;
+      }
+      setBusy(true);
       try {
         const action = await api("/api/agent/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
         if (action.kind === "exec") await execCommand(action.command);
@@ -409,10 +926,14 @@
       finally { setBusy(false); }
     }
 
-    $("provisionButton").onclick = provision; $("sideProvision").onclick = provision; $("destroyButton").onclick = destroy; $("refreshButton").onclick = refreshStatus; $("sendButton").onclick = submit; $("readButton").onclick = () => readFile($("filePath").value.trim()); $("createSlideButton").onclick = createSlide; $("benchmarkButton").onclick = runBenchmarks; $("loadTestButton").onclick = runSlideLoadTest;
+	    $("provisionButton").onclick = provision; $("destroyButton").onclick = destroy; $("refreshButton").onclick = refreshStatus; $("sendButton").onclick = () => submit(); $("readButton").onclick = () => openArtifact($("filePath").value.trim()); $("createSlideButton").onclick = createSlide; $("benchmarkButton").onclick = runBenchmarks; $("loadTestButton").onclick = runSlideLoadTest; $("suiteRunButton").onclick = runBenchmarkSuite; $("suiteJsonButton").onclick = () => downloadSuite("json"); $("suiteMarkdownButton").onclick = () => downloadSuite("markdown");
+	    $("suiteProfile").onchange = () => { $("suiteDescription").textContent = benchmarkProfiles[$("suiteProfile").value].description; };
+    $("modeSelect").onchange = () => { state.mode = $("modeSelect").value; sessionStorage.setItem("agentMode", state.mode); $("terminal").textContent = state.mode === "agent" ? "agent@cubesandbox $ Chọn một task để bắt đầu…" : "agent@workspace $ Chưa có lệnh nào…"; $("terminalStatus").textContent = "Đang chờ"; applyMode(); };
+    $("fileList").addEventListener("click", (event) => { const row = event.target.closest("[data-path]"); if (row) { $("filePath").value = row.dataset.path; openArtifact(row.dataset.path); } });
     $("commandInput").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submit(); } });
-    document.querySelectorAll(".quick").forEach((button) => button.addEventListener("click", () => { $("commandInput").value = button.dataset.command; submit(); }));
-    setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }, 1000); $("clock").textContent = now(); refreshStatus();
+    document.querySelectorAll(".quick").forEach((button) => button.addEventListener("click", () => { $("commandInput").value = button.dataset.command; submit(button.dataset.task || null); }));
+    applyMode();
+    refreshStatus();
   </script>
 </body>
 </html>

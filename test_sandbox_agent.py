@@ -13,6 +13,7 @@ from unittest.mock import Mock, patch
 import sandbox_agent_server as app
 import sandbox_slide_load_runner as slide_load_runner
 import agent_workload_runner as agent_workloads
+import benchmark_suite_client as benchmark_suite
 import slide_two_client_load_test as slide_load_test
 
 
@@ -131,6 +132,39 @@ class SandboxContractTests(unittest.TestCase):
         handler.do_POST()
         self.assertEqual(handler.send_json.call_args.args[1]["command"], "libreoffice --version")
 
+    def test_agent_task_runs_through_real_sandbox_adapter_and_validates_artifacts(self):
+        report = {
+            "workload": "code", "output_dir": "/output/agent-runs/abcdef123456",
+            "artifacts": [{"path": "/output/agent-runs/abcdef123456/calculator.py", "bytes": 42}],
+            "artifact_count": 1, "elapsed_seconds": 0.2, "details": {"tests_passed": 3},
+        }
+        captured = {"exit_code": 0, "stdout": json.dumps(report), "stderr": "",
+                    "metrics": {"peak_rss_kb": 12000}}
+        with patch.object(app.secrets, "token_hex", return_value="abcdef123456"), \
+             patch.object(app, "run_process_capture", return_value=captured) as run:
+            result = app.execute_agent_task("code")
+        command, cwd = run.call_args.args
+        self.assertEqual(cwd, "/output")
+        self.assertTrue(command.startswith("python3 -u -c "))
+        self.assertIn(" code abcdef123456 ", command)
+        self.assertTrue(run.call_args.kwargs["measure"])
+        self.assertEqual(result["report"]["details"]["tests_passed"], 3)
+        self.assertEqual(result["metrics"]["peak_rss_kb"], 12000)
+
+    def test_agent_task_endpoint_validates_task_and_returns_report(self):
+        handler = object.__new__(app.Handler)
+        handler.send_json = Mock()
+        handler.read_json = Mock(return_value={"task": "unknown"})
+        with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}):
+            with self.assertRaises(ValueError):
+                handler.run_agent_task()
+        handler.read_json = Mock(return_value={"task": "data"})
+        expected = {"ok": True, "task": "data"}
+        with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
+             patch.object(app, "execute_agent_task", return_value=expected):
+            handler.run_agent_task()
+        handler.send_json.assert_called_with(200, expected)
+
     def test_invalid_tool_calls_are_rejected_before_execution(self):
         def call(name, arguments):
             return app.to_sandbox_call({"function": {"name": name, "arguments": arguments}})
@@ -158,7 +192,8 @@ class SandboxContractTests(unittest.TestCase):
         handler.send_json.reset_mock()
         with patch.dict(os.environ, {"SANDBOX_API_BASE_URL": "https://api.example.test"}), \
              patch.object(app, "remote_json_request", return_value=(201, complete, {})), \
-             patch.object(app, "run_command_for_setup") as initialize:
+             patch.object(app, "run_command_for_setup") as initialize, \
+             patch.object(app, "verify_sandbox_memory_limit", return_value=2 * 1024 ** 3):
             handler._provision_locked()
         initialize.assert_called_once_with("mkdir -p /output /scratch")
         self.assertEqual(app.state["sandbox_id"], "new123")
@@ -166,6 +201,23 @@ class SandboxContractTests(unittest.TestCase):
         self.assertEqual(status, 201)
         self.assertNotIn("sandboxID", payload)
         self.assertNotIn("domain", payload)
+        self.assertEqual(payload["memory_limit_gib"], 2.0)
+
+    def test_sandbox_memory_limit_must_be_two_gib_or_less(self):
+        gib = 1024 ** 3
+        with patch.object(app, "run_process_capture", return_value={
+                "exit_code": 0,
+                "stdout": json.dumps({"cgroup": None, "mem_total": 2 * gib}), "stderr": ""}):
+            self.assertEqual(app.verify_sandbox_memory_limit(), 2 * gib)
+        for value in (
+                json.dumps({"cgroup": None, "mem_total": 2 * gib + 1}),
+                json.dumps({"cgroup": str(2 * gib + 1), "mem_total": 4 * gib}),
+                "invalid"):
+            with self.subTest(value=value), \
+                 patch.object(app, "run_process_capture", return_value={
+                     "exit_code": 0, "stdout": value, "stderr": ""}), \
+                 self.assertRaises(RuntimeError):
+                app.verify_sandbox_memory_limit()
 
     def test_provision_error_preserves_remote_status_and_detail(self):
         app.state.update({"sandbox_id": None, "domain": None, "envd_access_token": None})
@@ -184,21 +236,91 @@ class SandboxContractTests(unittest.TestCase):
             app.benchmark_command("print('unsafe')", "custom; echo bad")
         command = app.benchmark_command("print('ok')", "cpu")
         self.assertIn("python3 -c", command)
+        agent_command = app.benchmark_command("print('ok')", "agent", b"print('worker')")
+        self.assertIn(" agent ", agent_command)
+        self.assertIn(base64.b64encode(b"print('worker')").decode("ascii"), agent_command)
+        with self.assertRaisesRegex(ValueError, "requires worker source"):
+            app.benchmark_command("print('ok')", "agent")
 
     def test_runner_source_compiles(self):
         compile(app.BENCHMARK_FILE.read_text(encoding="utf-8"), "benchmark_runner.py", "exec")
         compile(app.MEASURED_RUNNER_FILE.read_text(encoding="utf-8"), "measured_exec_runner.py", "exec")
         compile(app.SLIDE_LOAD_RUNNER_FILE.read_text(encoding="utf-8"), "sandbox_slide_load_runner.py", "exec")
         compile(app.AGENT_WORKLOAD_FILE.read_text(encoding="utf-8"), "agent_workload_runner.py", "exec")
+        compile(app.AGENT_TASK_RUNNER_FILE.read_text(encoding="utf-8"), "sandbox_agent_task_runner.py", "exec")
+
+    def test_web_exposes_automated_benchmark_profiles_and_downloads(self):
+        source = app.INDEX_FILE.read_text(encoding="utf-8")
+        for element_id in ("suiteProfile", "suiteRunButton", "suiteProgressBar",
+                           "suiteVerdict", "suiteJsonButton", "suiteMarkdownButton"):
+            self.assertIn(f'id="{element_id}"', source)
+        self.assertIn("standard: {", source)
+        self.assertIn("tổng 65 load task", source)
+        self.assertIn("tổng 441 load task", source)
+        self.assertIn("function runBenchmarkSuite()", source)
+        self.assertIn("function suiteMarkdown(report)", source)
+
+    def test_automated_benchmark_suite_collects_and_renders_results(self):
+        profile = {
+            "basic_rounds": 1,
+            "agent_rounds": 1,
+            "loads": [("workflow", 2, 1, 0.1)],
+        }
+        hardware = {
+            "logical_cpus_visible": 2,
+            "memory_limit_bytes": 1930 * 1024 * 1024,
+        }
+        responses = [
+            {"active": True},
+            {"hardware": hardware, "results": [{
+                "task": "cpu", "elapsed_seconds": 1.5,
+                "cpu_percent_one_core": 100, "peak_rss_kb": 6000,
+                "disk_read_bytes": 0, "disk_write_bytes": 0,
+            }]},
+            {"hardware": hardware, "results": [{
+                "task": "agent", "elapsed_seconds": 12.0,
+                "cpu_percent_one_core": 95, "peak_rss_kb": 900000,
+                "detail": {"artifact_count": 10, "checks_passed": 6, "stages": [
+                    {"name": "data", "elapsed_seconds": 1.2, "rss_after_kb": 50000},
+                ]},
+            }]},
+            {"report": {
+                "workload": "workflow", "simulated_users": 2, "tasks_per_user": 1,
+                "requested_tasks": 2, "succeeded": 2, "failed": 0,
+                "total_seconds": 4.0, "latency_p50_seconds": 3.0,
+                "latency_p95_seconds": 3.5, "max_concurrent_tasks": 2,
+                "sandbox_memory_peak_sampled_bytes": 800 * 1024 * 1024,
+                "sandbox_memory_limit_bytes": 1930 * 1024 * 1024,
+                "sandbox_oom_kills_during_run": 0,
+            }},
+        ]
+        with patch.dict(benchmark_suite.PROFILES, {"test": profile}), \
+             patch.object(benchmark_suite, "request_json", side_effect=responses), \
+             patch.object(benchmark_suite.time, "monotonic", side_effect=[10.0, 16.0]):
+            report = benchmark_suite.run_suite("http://127.0.0.1:8787", "test")
+        self.assertEqual(report["elapsed_seconds"], 6.0)
+        self.assertEqual(report["load_runs"][0]["report"]["succeeded"], 2)
+        rendered = benchmark_suite.markdown_report(report)
+        self.assertIn("Kết luận tự động: **ĐẠT**", rendered)
+        self.assertIn("Throughput (task/s)", rendered)
+        self.assertIn("| 1 | data | 1.2 |", rendered)
+        report["load_runs"][0]["report"]["sandbox_memory_peak_sampled_bytes"] = None
+        self.assertIn("Kết luận tự động: **ĐẠT CÓ ĐIỀU KIỆN**",
+                      benchmark_suite.markdown_report(report))
+
+    def test_automated_benchmark_suite_requires_active_sandbox(self):
+        with patch.object(benchmark_suite, "request_json", return_value={"active": False}), \
+             self.assertRaisesRegex(RuntimeError, "không có CubeSandbox"):
+            benchmark_suite.run_suite("http://127.0.0.1:8787", "quick")
 
     def test_load_test_options_validate_bounds_and_types(self):
         self.assertEqual(app.load_test_options({}), (2, 1, 0.0, "slide"))
-        self.assertEqual(app.load_test_options({"users": 20, "tasks_per_user": 5, "stagger_seconds": 0.5}),
-                         (20, 5, 0.5, "slide"))
+        self.assertEqual(app.load_test_options({"users": 8, "tasks_per_user": 5, "stagger_seconds": 0.5}),
+                         (8, 5, 0.5, "slide"))
         self.assertEqual(app.load_test_options({"workload": "workflow"}), (2, 1, 0.0, "workflow"))
-        for body in ({"users": 0}, {"users": 21}, {"users": True},
+        for body in ({"users": 0}, {"users": 9}, {"users": True},
                      {"tasks_per_user": 0}, {"tasks_per_user": 11},
-                     {"users": 20, "tasks_per_user": 10},
+                     {"users": 8, "tasks_per_user": 13},
                      {"stagger_seconds": -1}, {"stagger_seconds": 3},
                      {"stagger_seconds": True}, {"workload": "unknown"}, {"workload": 4}):
             with self.subTest(body=body), self.assertRaises(ValueError):
@@ -221,16 +343,35 @@ class SandboxContractTests(unittest.TestCase):
             root = Path(name)
             code = root / "code"
             code.mkdir()
-            self.assertEqual(agent_workloads.run("code", code)["tests_passed"], 3)
+            self.assertEqual(agent_workloads.run("code", code)["tests_passed"], 8)
             search = root / "search"
             search.mkdir()
-            self.assertEqual(agent_workloads.run("search", search)["matches"], 71)
+            result = agent_workloads.run("search", search)
+            self.assertEqual(result["matches"], 295)
+            self.assertEqual(result["files_scanned"], 5000)
+            self.assertEqual(len(result["citations"]), 5)
+
+    def test_search_reuses_one_read_only_corpus_for_different_queries(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            corpus = root / "uploaded-corpus"
+            manifest = agent_workloads.prepare_search_corpus(corpus, file_count=50)
+            before = sorted(path.relative_to(corpus) for path in corpus.rglob("*"))
+            for index, query in enumerate(agent_workloads.SEARCH_QUERIES[:2]):
+                output = root / f"result-{index}"
+                output.mkdir()
+                result = agent_workloads.run("search", output, corpus, query)
+                self.assertTrue(result["shared_read_only_corpus"])
+                self.assertEqual(result["matches"], manifest["expected_matches"][query])
+                self.assertTrue(result["citations"])
+                self.assertTrue((output / "search-results.json").is_file())
+            self.assertEqual(before, sorted(path.relative_to(corpus) for path in corpus.rglob("*")))
 
     @unittest.skipUnless(importlib.util.find_spec("PIL"), "Pillow is not installed")
     def test_agent_workload_images(self):
         with tempfile.TemporaryDirectory() as name:
             result = agent_workloads.run("images", Path(name))
-        self.assertEqual(result["images_processed"], 4)
+        self.assertEqual(result["images_processed"], 12)
         self.assertGreater(result["contact_bytes"], 1000)
 
     def test_slide_load_endpoint_returns_report(self):

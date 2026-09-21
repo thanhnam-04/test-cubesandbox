@@ -7,6 +7,7 @@ Output slides live in one temporary /scratch directory and are removed on exit.
 import base64
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -19,16 +20,52 @@ from pathlib import Path
 
 ORIGINAL_PATH = 'path = Path("/output/slide_html_dep.html")'
 ORIGINAL_TITLE = "<title>Modern HTML Slide Deck</title>"
-WORKLOAD_TIMEOUTS = {"slide": 10, "documents": 45, "data": 45, "code": 30,
-                     "images": 45, "search": 45, "workflow": 75}
+WORKLOAD_TIMEOUTS = {"slide": 10, "documents": 75, "data": 75, "code": 45,
+                     "images": 75, "search": 75, "workflow": 120}
+MAX_SANDBOX_MEMORY_BYTES = 2 * 1024 * 1024 * 1024
+MAX_USERS = 8
+MAX_TASKS = 80
+WORKLOAD_CONCURRENCY = {"slide": 8, "documents": 4, "data": 4, "code": 8,
+                        "images": 4, "search": 8, "workflow": 3}
+
+
+def cgroup_v2_path(name):
+    """Locate a cgroup v2 file for this process, including nested cgroups."""
+    try:
+        for line in Path("/proc/self/cgroup").read_text(encoding="ascii").splitlines():
+            hierarchy, controllers, relative = line.split(":", 2)
+            if hierarchy == "0" and not controllers:
+                nested = Path("/sys/fs/cgroup") / relative.lstrip("/") / name
+                if nested.exists():
+                    return nested
+    except (OSError, ValueError):
+        pass
+    return Path("/sys/fs/cgroup") / name
 
 
 def cgroup_number(name):
+    candidates = [cgroup_v2_path(name)]
+    if name == "memory.max":
+        candidates.append(Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"))
+    for path in candidates:
+        try:
+            value = path.read_text(encoding="ascii").strip()
+            parsed = None if value == "max" else int(value)
+            if parsed is not None and parsed < 2 ** 60:
+                return parsed
+        except (OSError, ValueError):
+            pass
+    return None
+
+
+def memory_total_bytes():
     try:
-        value = Path("/sys/fs/cgroup", name).read_text(encoding="ascii").strip()
-        return None if value == "max" else int(value)
-    except (OSError, ValueError):
-        return None
+        for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
 
 
 def percentile(values, fraction):
@@ -42,9 +79,9 @@ def percentile(values, fraction):
 
 
 def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="slide", worker_source=None):
-    if (type(users) is not int or not 1 <= users <= 20
+    if (type(users) is not int or not 1 <= users <= MAX_USERS
             or type(tasks_per_user) is not int or not 1 <= tasks_per_user <= 10
-            or users * tasks_per_user > 100
+            or users * tasks_per_user > MAX_TASKS
             or type(stagger_seconds) not in (int, float) or not 0 <= stagger_seconds <= 2):
         raise ValueError("load test exceeds the allowed users, tasks, or stagger bounds")
     if workload not in WORKLOAD_TIMEOUTS or (workload != "slide" and not worker_source):
@@ -61,8 +98,18 @@ def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="s
     stop_monitor = threading.Event()
     memory_before = cgroup_number("memory.current")
     memory_peak = memory_before
-    memory_limit = cgroup_number("memory.max")
+    limits = [value for value in (cgroup_number("memory.max"), memory_total_bytes())
+              if value is not None]
+    memory_limit = min(limits) if limits else None
+    if memory_limit is None or memory_limit > MAX_SANDBOX_MEMORY_BYTES:
+        raise ValueError("sandbox memory.max must be configured at 2 GiB or less")
     oom_kills_before = cgroup_events("oom_kill")
+    parallel_limit = min(users, WORKLOAD_CONCURRENCY[workload])
+    task_slots = threading.BoundedSemaphore(parallel_limit)
+    shared_search_corpus = None
+    search_queries = ()
+    setup_seconds = 0.0
+    shared_input = None
 
     def monitor_memory():
         nonlocal memory_peak
@@ -79,11 +126,21 @@ def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="s
         output = task_dir / f"{marker}.html"
         source = (template.replace(ORIGINAL_PATH, f'path = Path("{output}")', 1)
                   .replace(ORIGINAL_TITLE, f"<title>{marker}</title>", 1))
-        args = ([sys.executable, "-c", source] if workload == "slide" else
-                [sys.executable, "-c", worker_source, workload, str(task_dir)])
+        if workload == "slide":
+            args = [sys.executable, "-c", source]
+        elif workload == "search":
+            query = search_queries[((user_number - 1) * tasks_per_user + task_number - 1)
+                                   % len(search_queries)]
+            args = [sys.executable, "-c", worker_source, workload, str(task_dir),
+                    str(shared_search_corpus), query]
+            result_query = query
+        else:
+            args = [sys.executable, "-c", worker_source, workload, str(task_dir)]
         start = time.monotonic()
         result = {"user": user_number, "task": task_number, "ok": False,
                   "workload": workload, "elapsed_seconds": None, "peak_rss_kb": None}
+        if workload == "search":
+            result["query"] = result_query
         try:
             task_dir.mkdir()
             with tempfile.TemporaryFile(dir=task_dir) as stderr_file:
@@ -140,6 +197,7 @@ def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="s
             result["error"] = str(error)
         finally:
             result["elapsed_seconds"] = round(time.monotonic() - start, 3)
+            shutil.rmtree(task_dir, ignore_errors=True)
             with results_lock:
                 results.append(result)
 
@@ -148,7 +206,8 @@ def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="s
         if stagger_seconds:
             time.sleep((user_number - 1) * stagger_seconds)
         for task_number in range(1, tasks_per_user + 1):
-            one_task(user_number, task_number, scratch)
+            with task_slots:
+                one_task(user_number, task_number, scratch)
 
     started = time.monotonic()
     monitor = threading.Thread(target=monitor_memory, daemon=True)
@@ -156,6 +215,18 @@ def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="s
     try:
         with tempfile.TemporaryDirectory(prefix="slide-load-", dir="/scratch") as scratch_name:
             scratch = Path(scratch_name)
+            if workload == "search":
+                namespace = {"__name__": "shared_search_setup"}
+                exec(worker_source, namespace)
+                prepare = namespace.get("prepare_search_corpus")
+                queries = namespace.get("SEARCH_QUERIES")
+                if not callable(prepare) or not isinstance(queries, tuple) or not queries:
+                    raise RuntimeError("search worker is missing shared-corpus support")
+                setup_started = time.monotonic()
+                shared_search_corpus = scratch / "uploaded-corpus"
+                shared_input = prepare(shared_search_corpus)
+                search_queries = queries
+                setup_seconds = round(time.monotonic() - setup_started, 3)
             with ThreadPoolExecutor(max_workers=users) as pool:
                 futures = [pool.submit(one_user, number, scratch) for number in range(1, users + 1)]
                 for future in futures:
@@ -178,8 +249,12 @@ def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="s
         "succeeded": len(successes),
         "failed": len(results) - len(successes),
         "stagger_seconds": stagger_seconds,
+        "shared_input_setup_seconds": setup_seconds,
+        "shared_input_files": None if shared_input is None else shared_input.get("file_count"),
+        "shared_input_bytes": None if shared_input is None else shared_input.get("total_bytes"),
         "total_seconds": total_seconds,
         "max_concurrent_tasks": max_active_tasks,
+        "configured_parallel_limit": parallel_limit,
         "latency_p50_seconds": percentile(durations, 0.5),
         "latency_p95_seconds": percentile(durations, 0.95),
         "max_task_peak_rss_kb": max(peaks) if peaks else None,
@@ -195,7 +270,7 @@ def run_experiment(users, tasks_per_user, stagger_seconds, template, workload="s
 
 def cgroup_events(name):
     try:
-        for line in Path("/sys/fs/cgroup/memory.events").read_text(encoding="ascii").splitlines():
+        for line in cgroup_v2_path("memory.events").read_text(encoding="ascii").splitlines():
             key, value = line.split()
             if key == name:
                 return int(value)
